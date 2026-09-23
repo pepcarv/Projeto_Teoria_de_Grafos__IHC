@@ -630,37 +630,104 @@ public class MalhaMetroferroviaria {
         return reconstruir(prev, o, d);
     }
 
-    /* Dijkstra com custo de entrada em j = w_j * tempo (tempo = estação + baldeação): minimiza o lambda acumulado. */
+    /* Dijkstra com custo de entrada em j = w_j * tempo (tempo = estação + baldeação): minimiza o lambda acumulado. 
+    Essa execução foi baseada no algorimto que vimos em sala de aula
+    
+    */
 
     public List<Integer> menorExposicao(int o, int d, int mes, int mob, double tEst, double tBald) {
 
-        Rede r = rede(mes, mob); int n = nos.size();
-        double[] dist = new double[n]; Arrays.fill(dist, Double.POSITIVE_INFINITY);
-        int[] prev = new int[n]; Arrays.fill(prev, -2);
-        PriorityQueue<double[]> pq = new PriorityQueue<>((a, b) -> Double.compare(a[0], b[0]));
+        Rede r = rede(mes, mob);
+        int n = nos.size();
 
-        dist[o] = r.w[o] * tEst; prev[o] = -1; pq.add(new double[]{dist[o], o});
+        // d_1i: menor custo conhecido da origem o até i
+        double[] dist = new double[n];
+        Arrays.fill(dist, Double.POSITIVE_INFINITY);
 
+        // rot(i): predecessor de i na rota
+        int[] prev = new int[n];
+        Arrays.fill(prev, -2);
 
-        while (!pq.isEmpty()) {
-            double[] t = pq.poll(); int v = (int) t[1];
+        // A: conjunto de vértices ainda abertos
+        Set<Integer> A = new HashSet<>();
 
-            if (t[0] > dist[v]) continue;
+        // F: conjunto de vértices fechados
+        Set<Integer> F = new HashSet<>();
 
+        // Inicialização:
+        // d_oo = 0
+        dist[o] = 0.0;
+        prev[o] = -1;
 
+        for (int i = 0; i < n; i++) {
+            A.add(i);
+        }
 
+        int k = 0;
 
+        while (!A.isEmpty()) {
 
-            if (v == d) break;
-            for (int[] e : adj.get(v)) {
-                int j = e[0];
-                double nd = dist[v] + r.w[j] * (tEst + (e[1] == 1 ? tBald : 0));
-                if (nd < dist[j]) { dist[j] = nd; prev[j] = v; pq.add(new double[]{nd, j}); }
+            // k++
+            k++;
+
+            
+            // r <- vértice de A com menor distância até a origem
+            int rAtual = -1;
+            double menorDistancia = Double.POSITIVE_INFINITY;
+
+            for (int i : A) {
+                if (dist[i] < menorDistancia) {
+                    menorDistancia = dist[i];
+                    rAtual = i;
+                }
+            }
+
+            // Não existem mais vértices alcançáveis
+            if (rAtual == -1 || Double.isInfinite(menorDistancia)) {
+                break;
+            }
+
+            
+            // F <- F U {r}
+            // A <- A - {r}
+            F.add(rAtual);
+            A.remove(rAtual);
+
+            
+            // S <- A ∩ N+(r)
+            for (int[] e : adj.get(rAtual)) {
+
+                int i = e[0];
+
+                // Só consideramos sucessores que ainda estão abertos.
+                if (!A.contains(i)) {
+                    continue;
+                }
+
+                // v_ri:
+                // custo de ir de rAtual para i
+                //
+                // Se e[1] == 1, existe baldeação e acrescentamos
+                // tBald ao tempo considerado na estação i.
+                double custoAresta =
+                        r.w[i] * (tEst + (e[1] == 1 ? tBald : 0.0));
+
+                // p <- min(d^(k-1)_1i, d_1r + v_ri)
+                double novaDistancia =
+                        dist[rAtual] + custoAresta;
+
+                if (novaDistancia < dist[i]) {
+                    // d^k_1i <- p
+                    dist[i] = novaDistancia;
+                    // rot(i) <- r
+                    prev[i] = rAtual;
+                }
             }
         }
 
-        return reconstruir(prev, o, d);
 
+
+        return reconstruir(prev, o, d);
     }
 
     private List<Integer> reconstruir(int[] prev, int o, int d) {
