@@ -1,4 +1,6 @@
-:: BATERIA DE TESTES USANDO O ARQUIVO DE ENTRADA DE TXT
+:: BATERIA DE TESTES USANDO O ARQUIVO DE ENTRADA DE TXT (versão final)
+
+
 :: -> usado para exemplificar as funcionalidade do simulador
 
 :: Referencias para montar o bat:
