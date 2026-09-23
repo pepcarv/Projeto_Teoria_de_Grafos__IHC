@@ -1,7 +1,6 @@
 :: BATERIA DE TESTES USANDO O ARQUIVO DE ENTRADA DE TXT
 :: -> usado para exemplificar as funcionalidade do simulador
 
-
 :: Referencias para montar o bat:
 :: - https://ss64.com/nt/chcp.html: Justifica o uso de 'chcp 65001' para forçar o 
 ::console do Windows a renderizar caracteres UTF-8, evitando falhas de acentuação nos logs.
