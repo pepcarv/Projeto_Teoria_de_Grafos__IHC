@@ -201,6 +201,7 @@ public class TesteGrafoMatriz {
 		}
 
 		boolean ok = g.insereAresta(v, w, peso);
+		// terminário direto funicona - #euAmoJava
 		System.out.println(ok ? "Aresta inserida com sucesso!" : "Nao foi possivel inserir a aresta.");
 	}
 
