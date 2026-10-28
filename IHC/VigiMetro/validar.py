@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Validação da topologia operacional (2026), preservação de demandas e algoritmos.
 O benchmark numérico do Java original NÃO é válido para outro grafo.
 """
