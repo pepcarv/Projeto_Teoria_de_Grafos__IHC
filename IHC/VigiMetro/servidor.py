@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 ROOT=Path(__file__).resolve().parent
 sys.path.insert(0,str(ROOT/'qr_vendor.zip'))
-from grafo import Grafo, MESES, POSICOES_VISUAIS, chave
+from grafo import Grafo, MESES, POSICOES_VISUAIS, POSICOES_POR_LINHA, chave
 from epidemiologia import CENARIOS,PROTECOES,percurso,simular
 
 G=Grafo(ROOT)
@@ -39,10 +39,10 @@ LIMITACOES=[
   'Modelo exploratório: não é previsão real de infecções, surtos ou segurança de viagens.',
   'Probabilidade do trajeto é condicional à presença de k infectados em cada estação.',
   'Demanda mensal média de dias úteis, sem informação sobre horários ou fluxos origem-destino.',
-  'Parte dos dados provém de anos diferentes e algumas linhas são nós agregados.',
+  'Parte dos dados provém de anos diferentes; nas linhas 7/10/11/12/13 as demandas por estação são estimadas dividindo os totais.',
   'Mobilidade e tempos de exposição são hipóteses do modelo Java.',
   'População SEIR é sintética: N_i = w_i × popEscala; SAR domiciliar não é aplicada ao metrô.',
-  'A topologia segue a ordem do CSV e as baldeações especificadas; agregações podem criar atalhos.'
+  'A topologia usa estações físicas de 2026 e baldeações verificadas; as demandas repartidas igualmente nas linhas CPTM são aproximações.'
 ]
 
 
@@ -74,7 +74,7 @@ def api_bootstrap():
     vistos={}
     nodes=[]
     for n in G.nos:
-        k=chave(n['estacao']);x,y=POSICOES_VISUAIS.get(k,(.5,.5))
+        k=chave(n['estacao']);x,y=POSICOES_POR_LINHA.get((n['linha_chave'],k), POSICOES_VISUAIS.get(k,(.5,.5)))
         if n['agregado']:
             vs=[POSICOES_VISUAIS[chave(G.nos[j]['estacao'])] for j,b in G.adj[n['id']] if chave(G.nos[j]['estacao']) in POSICOES_VISUAIS]
             if vs:x=sum(a for a,b in vs)/len(vs);y=sum(b for a,b in vs)/len(vs)

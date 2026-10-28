@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Port direto da construção do grafo, BFS, Dijkstra e betweenness de
-MalhaMetroferroviaria.java. CSVs são as únicas fontes de dados de demanda/topologia.
+"""Construção do grafo, BFS, Dijkstra e betweenness conforme referência Java.
+Topologia física de 2026: sem associação automática de estações homônimas;
+transferências explícitas e estações CPTM via CSVs. Fórmulas mantidas.
 """
 import csv
 import math
@@ -120,13 +121,9 @@ class Grafo:
             self.adj[b].append((a, bool(bald)))
         for ids in self.linhas.values():
             for a,b in zip(ids,ids[1:]):add(a,b,False)
-        agrupados = OrderedDict()
-        for n in self.nos:
-            if not n['agregado']:agrupados.setdefault(n['chave'],[]).append(n['id'])
-        for grupo in agrupados.values():
-            for i,a in enumerate(grupo):
-                for b in grupo[i+1:]:
-                    if self.nos[a]['linha_chave'] != self.nos[b]['linha_chave']:add(a,b,True)
+        # Transferências não devem ser deduzidas apenas do nome da estação:
+        # 'Lapa' nas linhas 7 e 8 são estações distintas sem integração em 2026.
+        # Cada baldeação válida precisa constar em conexoes.csv.
         if conex_path.is_file():
             for f in csv_ler(conex_path):
                 lk1,lk2 = chave_linha(f.get('linhaA','')),chave_linha(f.get('linhaB',''))
@@ -234,3 +231,37 @@ class Grafo:
 
 # Coordenadas ESQUEMÁTICAS originais do protótipo HTML enviado, sem valor geográfico.
 POSICOES_VISUAIS = {'aacdservidor': [0.804, 0.51], 'adolfopinheiro': [0.858, 0.773], 'altodaboavista': [0.871, 0.734], 'altodoipiranga': [0.643, 0.405], 'amadorbueno': [0.0, 0.99], 'ambuita': [0.025, 0.973], 'anarosa': [0.704, 0.477], 'anhangabau': [0.553, 0.524], 'antoniojoao': [0.253, 0.81], 'armenia': [0.427, 0.484], 'arturalvim': [0.444, 0.427], 'autodromo': [0.908, 0.9], 'barrafunda': [0.429, 0.545], 'barueri': [0.227, 0.829], 'belem': [0.492, 0.401], 'berrini': [0.681, 0.843], 'borbagato': [0.876, 0.692], 'bressermooca': [0.523, 0.409], 'brigadeiro': [0.673, 0.541], 'brooklin': [0.874, 0.651], 'brunocovasmendesvilanatal': [0.979, 0.968], 'bras': [0.526, 0.45], 'butanta': [0.553, 0.787], 'camilohaddad': [0.567, 0.246], 'campobelo': [0.865, 0.611], 'campolimpo': [0.821, 0.964], 'capaoredondo': [0.825, 1.0], 'carandiru': [0.359, 0.456], 'carapicuiba': [0.305, 0.772], 'carraoassaiatacadista': [0.464, 0.401], 'ceasa': [0.47, 0.705], 'chacaraklabin': [0.709, 0.443], 'cidadejardim': [0.622, 0.803], 'cidadeuniversitaria': [0.529, 0.749], 'clinicas': [0.635, 0.61], 'comandantesampaio': [0.386, 0.711], 'conceicao': [0.837, 0.35], 'consolacao': [0.615, 0.585], 'corinthiansitaquera': [0.472, 0.451], 'domingosdemorais': [0.454, 0.588], 'engenheirocardoso': [0.1, 0.92], 'eucaliptos': [0.849, 0.573], 'farialima': [0.572, 0.715], 'fazendadajuta': [0.557, 0.068], 'fradiquecoutinho': [0.575, 0.675], 'generalmiguelcosta': [0.331, 0.752], 'giovannigronchi': [0.819, 0.887], 'grajau': [0.956, 0.944], 'granjajulieta': [0.75, 0.853], 'guilherminaesperanca': [0.404, 0.364], 'hebraicareboucas': [0.595, 0.777], 'higienopolismackenzie': [0.552, 0.567], 'hospitalsaopaulo': [0.777, 0.482], 'imperatrizleopoldina': [0.448, 0.629], 'itapevi': [0.075, 0.938], 'jabaquara': [0.861, 0.328], 'jandira': [0.151, 0.885], 'japaoliberdade': [0.594, 0.484], 'jardimbelval': [0.202, 0.848], 'jardimcolonial': [0.552, 0.0], 'jardimplanalto': [0.561, 0.138], 'jardimsilveira': [0.176, 0.866], 'jardimsaopauloayrtonsenna': [0.302, 0.416], 'joaodias': [0.785, 0.849], 'julioprestes': [0.398, 0.548], 'jurubatuba': [0.882, 0.88], 'linha10total': [0.537, 0.434], 'linha11total': [0.503, 0.464], 'linha12total': [0.511, 0.435], 'linha13total': [0.512, 0.396], 'linha7total': [0.486, 0.503], 'lapa': [0.461, 0.543], 'largotreze': [0.839, 0.809], 'luz': [0.504, 0.499], 'marechaldeodoro': [0.487, 0.558], 'moema': [0.828, 0.54], 'morumbi': [0.715, 0.852], 'oratorio': [0.569, 0.321], 'osasco': [0.414, 0.691], 'oscarfreire': [0.575, 0.635], 'palmeirasbarrafunda': [0.474, 0.523], 'paradainglesa': [0.276, 0.395], 'paraiso': [0.682, 0.504], 'patriarcavilare': [0.419, 0.398], 'paulista': [0.58, 0.593], 'pedroii': [0.554, 0.46], 'penhalojasbesni': [0.451, 0.365], 'pinheiros': [0.564, 0.753], 'portuguesatiete': [0.391, 0.472], 'pracadaarvore': [0.767, 0.422], 'presidentealtino': [0.446, 0.672], 'primaverainterlagos': [0.933, 0.922], 'quitauna': [0.358, 0.732], 'republica': [0.527, 0.534], 'sacoma': [0.605, 0.403], 'sagradocoracao': [0.126, 0.903], 'santacecilia': [0.513, 0.559], 'santacruz': [0.747, 0.452], 'santarita': [0.05, 0.955], 'santaterezinha': [0.279, 0.791], 'santana': [0.33, 0.437], 'santoamaro': [0.821, 0.847], 'santosimigrantes': [0.678, 0.418], 'santuarionsdefatimasumare': [0.66, 0.63], 'sapopemba': [0.559, 0.103], 'saudeultrafarma': [0.79, 0.396], 'socorro': [0.852, 0.862], 'saobento': [0.53, 0.498], 'saojoaquim': [0.625, 0.477], 'saojudas': [0.813, 0.372], 'saolucas': [0.568, 0.283], 'saomateus': [0.554, 0.034], 'saopaulomorumbi': [0.542, 0.822], 'se': [0.562, 0.492], 'tamanduatei': [0.568, 0.404], 'tatuape': [0.486, 0.434], 'tiradentes': [0.464, 0.493], 'trianonmasp': [0.646, 0.565], 'tucuruvi': [0.252, 0.374], 'varginha': [1.0, 0.992], 'vergueiro': [0.655, 0.487], 'vilamadalena': [0.687, 0.645], 'vilamariana': [0.736, 0.478], 'vilamatilde': [0.426, 0.342], 'vilaolimpia': [0.65, 0.826], 'vilaprudente': [0.568, 0.361], 'vilasonia': [0.533, 0.857], 'vilatolstoi': [0.565, 0.209], 'vilauniao': [0.563, 0.173], 'viladasbelezas': [0.819, 0.926], 'villalobosjaguare': [0.496, 0.733]}
+
+# Posições APENAS esquemáticas para as estações agora individualizadas.
+# Não são coordenadas geográficas e não entram nas equações epidemiológicas.
+POSICOES_VISUAIS.update({
+    # Linha 7-Rubi
+    'aguabranca': (.41,.50), 'piqueri': (.34,.46), 'pirituba': (.31,.43),
+    'vilaclarice': (.285,.40), 'jaragua': (.26,.36), 'vilaaurora': (.245,.32),
+    'perus': (.23,.27), 'caieiras': (.205,.23), 'francodarocha': (.17,.19),
+    'baltazarfidelis': (.145,.17), 'franciscomorato': (.12,.15),
+    'botujuru': (.115,.125), 'campolimpopaulista': (.105,.10),
+    'varzeapaulista': (.095,.07), 'jundiai': (.085,.035),
+    # Linha 10-Turquesa
+    'juventusmooca': (.54,.425), 'ipiranga': (.556,.416),
+    'saocaetanodosul': (.63,.432), 'utinga': (.65,.463),
+    'prefeitosaladino': (.677,.499), 'prefeitocelsodanielsantoandre': (.70,.54),
+    'capuava': (.74,.58), 'maua': (.77,.62), 'guapituba': (.80,.66),
+    'ribeiraopires': (.835,.70), 'riograndedaserra': (.87,.74),
+    # Linha 11-Coral
+    'dombosco': (.56,.448), 'josebonifacio': (.59,.438),
+    'guaianases': (.63,.42), 'antoniogianettineto': (.67,.40),
+    'ferrazdevasconcelos': (.72,.375), 'poa': (.765,.34),
+    'calmonviana': (.80,.315), 'suzano': (.835,.326),
+    'jundiapeba': (.863,.339), 'brazcubas': (.895,.351),
+    'mogidascruzes': (.925,.36), 'estudantes': (.96,.37),
+    # Linha 12-Safira e 13-Jade
+    'engenheirogoulart': (.58,.365), 'uspleste': (.61,.344),
+    'comendadorermelino': (.64,.33), 'saomiguelpaulista': (.67,.318),
+    'jardimhelenavilamara': (.70,.316), 'itaimpaulista': (.725,.314),
+    'jardimromano': (.745,.315), 'engenheiromanoelfeio': (.76,.315),
+    'itaquaquecetuba': (.778,.315), 'aracare': (.793,.315),
+    'guarulhoscecap': (.62,.23), 'aeroportoguarulhos': (.65,.17),
+})
+# Estações de Lapa, linhas 7 e 8, são fisicamente diferentes e NÃO interligadas.
+POSICOES_POR_LINHA = {('L7', 'lapa'): (.37,.48)}
