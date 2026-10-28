@@ -30,7 +30,7 @@ echo.
 echo ================================================================
 echo   VIGIMETRO
 echo   O navegador sera aberto automaticamente.
-echo   O link publico e o QR Code ficam disponiveis apos conectar.
+echo   Cloudflared opcional: sem ele, o site abre localmente.
 echo ================================================================
 echo.
 "%PYTHON_EXE%" %PYTHON_ARGS% -c "import sys;sys.exit(0 if sys.version_info >= (3,10) else 1)"
@@ -39,7 +39,23 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-"%PYTHON_EXE%" %PYTHON_ARGS% -u "%~dp0servidor.py"
+rem Verifica se o Cloudflared esta instalado, sem exigir instalacao.
+set "SERVIDOR_ARGS=--sem-tunel"
+where cloudflared >nul 2>&1
+if not errorlevel 1 set "SERVIDOR_ARGS="
+if exist "%~dp0cloudflared.exe" set "SERVIDOR_ARGS="
+if exist "%~dp0cloudflared" set "SERVIDOR_ARGS="
+if exist "%LOCALAPPDATA%\Microsoft\WinGet\Links\cloudflared.exe" set "SERVIDOR_ARGS="
+
+if defined SERVIDOR_ARGS (
+  echo [MODO LOCAL] Cloudflared nao encontrado.
+  echo [ACESSO] http://localhost:8000
+) else (
+  echo [MODO PUBLICO] Cloudflared encontrado.
+  echo [ACESSO LOCAL] http://localhost:8000
+)
+echo.
+"%PYTHON_EXE%" %PYTHON_ARGS% -u "%~dp0servidor.py" %SERVIDOR_ARGS%
 echo.
 echo Servidor encerrado. Pressione qualquer tecla para fechar.
 pause >nul
