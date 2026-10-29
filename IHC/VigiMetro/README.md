@@ -8,7 +8,9 @@ Alunos:
 
 ## Como iniciar
 
-Precisa de Python 3.10 ou mais recente para habilitar o acesso público por Cloudflare, instale o Cloudflared no terminal do Windows:
+Basta rodar o **`iniciar.bat`** para abrir localmente.
+
+Caso queira criar um acesso com link público, precisa de Python 3.10 ou mais recente para habilitar por Cloudflare. Cloudflared no terminal do Windows:
 
 ```bash
 winget install --id Cloudflare.cloudflared --exact
@@ -16,7 +18,7 @@ winget install --id Cloudflare.cloudflared --exact
 
 Depois, na pasta do projeto dois cliques no **`iniciar.bat`**. O navegador vai abrir o site automaticamente.
 
-**Sem Cloudflared:** abra a pasta no VS Code e execute no terminal:
+**Outra Opção Sem Cloudflared:** abra a pasta no VS Code e execute no terminal:
 
 ```bash
 python servidor.py --sem-tunel

@@ -1,4 +1,9 @@
-"""Validação da topologia operacional (2026), preservação de demandas e algoritmos.
+"""
+Alunos:
+- Pedro Henrique Carvalho Pereira - 10418861
+- Mateus Ribeiro Cerqueira - 10443901
+
+Validação da topologia operacional (2026), preservação de demandas e algoritmos.
 O benchmark numérico do Java original NÃO é válido para outro grafo.
 """
 import csv

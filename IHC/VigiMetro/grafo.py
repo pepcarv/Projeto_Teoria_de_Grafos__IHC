@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Alunos:
 - Pedro Henrique Carvalho Pereira - 10418861
