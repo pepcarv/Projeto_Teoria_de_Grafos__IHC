@@ -484,13 +484,21 @@ public class Main {
         MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_infecciosos.png"), "Pessoas infecciosas (média e P5-P95, " + r.execucoes + " execuções)",
 
                 "Dia", "Nº de pessoas infecciosas (população simulada)", List.of(new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, r.p5I, r.p95I, MalhaMetroferroviaria.PALETA[1])));
-        MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_alcance.png"), "Compartimentos médios (pessoas) e nós alcançados",
-                "Dia", "Nº de pessoas / nós", List.of(new MalhaMetroferroviaria.Serie("Alcance acumulado", x, r.mAlc, r.p5A, r.p95A, MalhaMetroferroviaria.PALETA[0]),
+        // O alcance representa estações; os compartimentos SEIR representam pessoas.
+        // Em figuras separadas, cada eixo vertical conserva sua própria unidade.
+        MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_alcance.png"),
+                "Alcance acumulado da disseminação", "Dia", "Estações alcançadas",
+                List.of(new MalhaMetroferroviaria.Serie("Alcance médio (P5–P95)",
+                        x, r.mAlc, r.p5A, r.p95A, MalhaMetroferroviaria.PALETA[0])));
 
-                        new MalhaMetroferroviaria.Serie("Expostos (E)", x, r.mE, null, null, MalhaMetroferroviaria.PALETA[3]),
-
-                        new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, null, null, MalhaMetroferroviaria.PALETA[1]),
-                        new MalhaMetroferroviaria.Serie("Removidos (R)", x, r.mR, null, null, MalhaMetroferroviaria.PALETA[2])));
+        MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_compartimentos.png"),
+                "Evolução dos compartimentos SEIR", "Dia", "Pessoas simuladas",
+                List.of(new MalhaMetroferroviaria.Serie("Expostos (E)", x, r.mE, null, null,
+                                MalhaMetroferroviaria.PALETA[3]),
+                        new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, null, null,
+                                MalhaMetroferroviaria.PALETA[1]),
+                        new MalhaMetroferroviaria.Serie("Removidos (R)", x, r.mR, null, null,
+                                MalhaMetroferroviaria.PALETA[2])));
         malha.mapa(dir.resolve("mapa_prob_alcance.png"), "Probabilidade de alcance por estação · " + MalhaMetroferroviaria.MESES[cfg.mes],
 
                 r.probAlcance, 1.0, "prob. de alcance", cfg.sementes, cfg.mes);

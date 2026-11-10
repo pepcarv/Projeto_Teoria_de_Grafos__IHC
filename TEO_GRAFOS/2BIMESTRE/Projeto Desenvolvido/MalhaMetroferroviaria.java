@@ -33,6 +33,9 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.Shape;
+import java.awt.geom.Path2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -1179,142 +1182,542 @@ public class MalhaMetroferroviaria {
             new Color(255, 127, 14), new Color(148, 103, 189), new Color(140, 86, 75), new Color(227, 119, 194),
             new Color(23, 190, 207), new Color(188, 189, 34), new Color(127, 127, 127), new Color(0, 0, 0), new Color(102, 194, 165)};
 
-    private static double passo(double range) {
+    // ----------------------------------------------------------------- apresentação das figuras
+    private static final Color COR_TEXTO = new Color(25, 25, 25);
+    private static final Color COR_GRADE = new Color(216, 216, 216);
+    private static final Color COR_BORDA = Color.BLACK;
+    private static final Font FONTE_TITULO = new Font("SansSerif", Font.BOLD, 38);
+    private static final Font FONTE_SUBTITULO = new Font("SansSerif", Font.PLAIN, 27);
+    private static final Font FONTE_EIXO = new Font("SansSerif", Font.BOLD, 31);
+    private static final Font FONTE_NUMERO = new Font("SansSerif", Font.PLAIN, 26);
+    private static final Font FONTE_LEGENDA = new Font("SansSerif", Font.PLAIN, 23);
 
-
-        if (range <= 0) return 1;
-        double raw = range / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
-        double multiplo;
-        if (f < 1.5) {
-            multiplo = 1;
-        } else if (f < 3) {
-            multiplo = 2;
-        } else if (f < 7) {
-            multiplo = 5;
-        } else {
-            multiplo = 10;
+    private static double passo(double intervalo) {
+        if (!Double.isFinite(intervalo) || intervalo <= 0) {
+            return 1;
         }
-        return multiplo * mag;
-    }
-    private static String fmt(double v, double step) {
-        if (v == 0) return "0";
-        if (step < 1e-3 || Math.abs(v) >= 1e6) return String.format(Locale.US, "%.1e", v);
-        int decimais = 0;
-        if (step < 1) {
-            decimais = (int) Math.ceil(-Math.log10(step));
+        double ideal = intervalo / 6;
+        double potencia = Math.pow(10, Math.floor(Math.log10(ideal)));
+        double fracao = ideal / potencia;
+        double fator = 1;
+        if (fracao > 1 && fracao <= 2) {
+            fator = 2;
+        } else if (fracao > 2 && fracao <= 5) {
+            fator = 5;
+        } else if (fracao > 5) {
+            fator = 10;
         }
-        return String.format(Locale.US, "%." + decimais + "f", v);
-
+        return fator * potencia;
     }
-    private static Graphics2D nova(BufferedImage img) {
-        Graphics2D g = img.createGraphics();
+
+    private static String fmt(double valor, double intervalo) {
+        if (Math.abs(valor) < 1e-15) {
+            return "0";
+        }
+        if (Math.abs(valor) >= 1e7 || Math.abs(valor) < 1e-3) {
+            return String.format(Locale.forLanguageTag("pt-BR"), "%.1e", valor);
+        }
+        int casas = 0;
+        if (intervalo < 1) {
+            casas = (int) Math.ceil(-Math.log10(intervalo));
+        }
+        casas = Math.max(0, Math.min(casas, 6));
+        return String.format(Locale.forLanguageTag("pt-BR"), "%,." + casas + "f", valor);
+    }
+
+    private static Graphics2D nova(BufferedImage imagem) {
+        Graphics2D g = imagem.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-        g.setColor(Color.WHITE); g.fillRect(0, 0, img.getWidth(), img.getHeight());
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, imagem.getWidth(), imagem.getHeight());
         return g;
     }
 
-    public static void graficoLinhas(Path arq, String titulo, String xl, String yl, List<Serie> series) throws IOException {
-        int W = 1200, H = 650, ml = 90, mr = 310, mt = 60, mb = 70;
-        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = nova(img);
-        double xmin = Double.MAX_VALUE, xmax = -Double.MAX_VALUE, ymin = 0, ymax = -Double.MAX_VALUE;
-        for (Serie s : series) for (int i = 0; i < s.x.length; i++) {
-            xmin = Math.min(xmin, s.x[i]); xmax = Math.max(xmax, s.x[i]);
-            double teto = s.y[i];
-            if (s.hi != null) {
-                teto = Math.max(s.hi[i], s.y[i]);
-            }
-            ymax = Math.max(ymax, teto);
+    // Divide o título apenas para apresentá-lo; o nome original não é alterado.
+    private static String[] dividirTitulo(String titulo) {
+        int separador = titulo.indexOf(" · ");
+        if (separador < 0) {
+            return new String[]{titulo, ""};
         }
-        if (ymax <= ymin) ymax = ymin + 1;
-        if (xmax <= xmin) xmax = xmin + 1;
-        double sy = passo(ymax - ymin), sx = passo(xmax - xmin);
-        ymax = Math.ceil(ymax / sy) * sy;
-        int pw = W - ml - mr, ph = H - mt - mb;
-        g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        for (double y = ymin; y <= ymax + sy * 1e-6; y += sy) {
-            int py = (int) (mt + ph - (y - ymin) / (ymax - ymin) * ph);
-            g.setColor(new Color(225, 225, 225)); g.drawLine(ml, py, ml + pw, py);
-            g.setColor(Color.DARK_GRAY); String t = fmt(y, sy);
-            g.drawString(t, ml - 8 - g.getFontMetrics().stringWidth(t), py + 4);
-        }
-        for (double x = Math.ceil(xmin / sx) * sx; x <= xmax + sx * 1e-6; x += sx) {
-            int px = (int) (ml + (x - xmin) / (xmax - xmin) * pw);
-            g.setColor(new Color(240, 240, 240)); g.drawLine(px, mt, px, mt + ph);
-            g.setColor(Color.DARK_GRAY); String t = fmt(x, sx);
-            g.drawString(t, px - g.getFontMetrics().stringWidth(t) / 2, mt + ph + 18);
-        }
-        g.setColor(Color.BLACK); g.drawRect(ml, mt, pw, ph);
-        for (Serie s : series) {
-
-            int n = s.x.length; int[] px = new int[n], py = new int[n];
-
-
-            for (int i = 0; i < n; i++) {
-                px[i] = (int) (ml + (s.x[i] - xmin) / (xmax - xmin) * pw);
-                py[i] = (int) (mt + ph - (s.y[i] - ymin) / (ymax - ymin) * ph);
-            }
-            if (s.lo != null && s.hi != null) {
-                int[] bx = new int[2 * n], by = new int[2 * n];
-                for (int i = 0; i < n; i++) {
-                    bx[i] = px[i]; by[i] = (int) (mt + ph - (s.hi[i] - ymin) / (ymax - ymin) * ph);
-                    bx[2 * n - 1 - i] = px[i]; by[2 * n - 1 - i] = (int) (mt + ph - (s.lo[i] - ymin) / (ymax - ymin) * ph);
-                }
-                g.setColor(new Color(s.cor.getRed(), s.cor.getGreen(), s.cor.getBlue(), 45));
-                g.fillPolygon(bx, by, 2 * n);
-            }
-            g.setColor(s.cor); g.setStroke(new BasicStroke(2.2f));
-            g.drawPolyline(px, py, n);
-            if (n <= 40) for (int i = 0; i < n; i++) g.fillOval(px[i] - 3, py[i] - 3, 6, 6);
-
-
-        }
-        g.setStroke(new BasicStroke(1f));
-        int ly = mt + 10;
-        for (Serie s : series) {
-            g.setColor(s.cor); g.setStroke(new BasicStroke(3f)); g.drawLine(ml + pw + 20, ly, ml + pw + 45, ly);
-            g.setStroke(new BasicStroke(1f)); g.setColor(Color.BLACK);
-            String nome = s.nome;
-            if (nome.length() > 38) {
-                nome = nome.substring(0, 37) + "…";
-            }
-            g.drawString(nome, ml + pw + 52, ly + 4); ly += 20;
-        }
-        g.setFont(new Font("SansSerif", Font.BOLD, 16)); g.setColor(Color.BLACK);
-        g.drawString(titulo, ml, 30);
-        g.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        g.drawString(xl, ml + pw / 2 - g.getFontMetrics().stringWidth(xl) / 2, H - 20);
-        g.rotate(-Math.PI / 2); g.drawString(yl, -(mt + ph / 2 + g.getFontMetrics().stringWidth(yl) / 2), 24); g.rotate(Math.PI / 2);
-        g.dispose();
-        ImageIO.write(img, "png", arq.toFile());
+        String principal = titulo.substring(0, separador).trim();
+        String complemento = titulo.substring(separador + 3).trim();
+        return new String[]{principal, complemento};
     }
 
-    public static void graficoBarras(Path arq, String titulo, String eixo, List<String> rot, double[] val) throws IOException {
-        int n = rot.size(), W = 1100, ml = 330, mr = 60, mt = 60, mb = 50, bh = 26, H = mt + mb + n * bh;
-        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = nova(img);
-        double max = 1e-12; for (double v : val) max = Math.max(max, v);
-        g.setFont(new Font("SansSerif", Font.BOLD, 16)); g.setColor(Color.BLACK); g.drawString(titulo, 20, 30);
-        g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        for (int i = 0; i < n; i++) {
-
-            int y = mt + i * bh, w = (int) ((W - ml - mr) * val[i] / max);
-            g.setColor(PALETA[0]); g.fillRect(ml, y, Math.max(w, 1), bh - 6);
-            g.setColor(Color.BLACK);
-            String r = rot.get(i);
-            if (r.length() > 44) {
-                r = r.substring(0, 43) + "…";
-            }
-            g.drawString(r, ml - 8 - g.getFontMetrics().stringWidth(r), y + 15);
-            g.drawString(String.format(Locale.US, "%.3g", val[i]), ml + w + 6, y + 15);
+    private static String abreviar(Graphics2D g, String texto, int largura) {
+        FontMetrics fm = g.getFontMetrics();
+        if (fm.stringWidth(texto) <= largura) {
+            return texto;
         }
-        g.drawString(eixo, ml, H - 15);
+        int limite = texto.length();
+        while (limite > 1 && fm.stringWidth(texto.substring(0, limite) + "…") > largura) {
+            limite--;
+        }
+        return texto.substring(0, limite) + "…";
+    }
+
+    private static void centralizar(Graphics2D g, String texto, int x, int y) {
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(texto, x - fm.stringWidth(texto) / 2, y);
+    }
+
+    private static void tituloFigura(Graphics2D g, String titulo, int largura) {
+        String[] partes = dividirTitulo(titulo);
+        g.setFont(FONTE_TITULO);
+        g.setColor(COR_TEXTO);
+        String principal = abreviar(g, partes[0], largura - 140);
+        int centro = largura / 2;
+        centralizar(g, principal, centro, 58);
+        int comprimento = g.getFontMetrics().stringWidth(principal);
+        g.setStroke(new BasicStroke(2f));
+        g.drawLine(centro - comprimento / 2, 66, centro + comprimento / 2, 66);
+        if (!partes[1].isEmpty()) {
+            g.setFont(FONTE_SUBTITULO);
+            String complemento = abreviar(g, partes[1], largura - 140);
+            centralizar(g, complemento, centro, 104);
+        }
+    }
+
+    private static BasicStroke tracoSerie(int indice, float espessura) {
+        float[] padrao = null;
+        if (indice % 4 == 1) {
+            padrao = new float[]{16, 8};
+        } else if (indice % 4 == 2) {
+            padrao = new float[]{4, 8};
+        } else if (indice % 4 == 3) {
+            padrao = new float[]{15, 7, 4, 7};
+        }
+        if (padrao == null) {
+            return new BasicStroke(espessura, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+        }
+        return new BasicStroke(espessura, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                10f, padrao, 0);
+    }
+
+    private static void marcadorSerie(Graphics2D g, int indice, int x, int y, Color cor) {
+        int raio = 9;
+        g.setColor(Color.WHITE);
+        g.setStroke(new BasicStroke(3.1f));
+        if (indice % 3 == 0) {
+            g.fillOval(x - raio, y - raio, 2 * raio, 2 * raio);
+            g.setColor(cor);
+            g.drawOval(x - raio, y - raio, 2 * raio, 2 * raio);
+        } else if (indice % 3 == 1) {
+            g.fillRect(x - raio, y - raio, 2 * raio, 2 * raio);
+            g.setColor(cor);
+            g.drawRect(x - raio, y - raio, 2 * raio, 2 * raio);
+        } else {
+            Polygon triangulo = new Polygon();
+            triangulo.addPoint(x, y - raio);
+            triangulo.addPoint(x + raio, y + raio);
+            triangulo.addPoint(x - raio, y + raio);
+            g.fillPolygon(triangulo);
+            g.setColor(cor);
+            g.drawPolygon(triangulo);
+        }
+    }
+
+    // Curvas iguais são agrupadas apenas na figura, nunca nos resultados numéricos.
+    private static boolean mesmosValores(double[] primeiro, double[] segundo) {
+        if (primeiro == null || segundo == null) {
+            return primeiro == null && segundo == null;
+        }
+        if (primeiro.length != segundo.length) {
+            return false;
+        }
+        for (int i = 0; i < primeiro.length; i++) {
+            double a = primeiro[i];
+            double b = segundo[i];
+            if (!Double.isFinite(a) || !Double.isFinite(b)) {
+                if (Double.doubleToLongBits(a) != Double.doubleToLongBits(b)) {
+                    return false;
+                }
+            } else {
+                double tolerancia = 1e-12 * Math.max(1e-12, Math.max(Math.abs(a), Math.abs(b)));
+                if (Math.abs(a - b) > tolerancia) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static boolean mesmasCurvas(Serie a, Serie b) {
+        if (!mesmosValores(a.x, b.x)) {
+            return false;
+        }
+        if (!mesmosValores(a.y, b.y)) {
+            return false;
+        }
+        if (!mesmosValores(a.lo, b.lo)) {
+            return false;
+        }
+        return mesmosValores(a.hi, b.hi);
+    }
+
+    private static String nomeBreveSerie(String nome) {
+        // O cenário continua completo nos CSVs; a legenda mostra apenas o indicador principal.
+        int indicadorR0 = nome.lastIndexOf("(R0=");
+        int indicadorRe = nome.lastIndexOf("(Re=");
+        int indice = Math.max(indicadorR0, indicadorRe);
+        if (indice >= 0) {
+            int fim = nome.indexOf(',', indice);
+            if (fim > indice) {
+                String descricao = nome.substring(0, indice).trim();
+                String indicador = nome.substring(indice + 1, fim);
+                return descricao + " · " + indicador;
+            }
+        }
+        return nome;
+    }
+
+    private static String nomeProtecaoBreve(String nome) {
+        if (nome.startsWith("Proteção ")) {
+            return nome.substring("Proteção ".length());
+        }
+        return nome;
+    }
+
+    private static String nomeCurvasCoincidentes(String primeiro, String segundo) {
+        String bfs = "Menos estações | ";
+        String dijkstra = "Menor exposição | ";
+        if (primeiro.startsWith(bfs) && segundo.startsWith(dijkstra)) {
+            String a = primeiro.substring(bfs.length());
+            String b = segundo.substring(dijkstra.length());
+            if (a.equals(b)) {
+                return "BFS = Dijkstra · " + nomeProtecaoBreve(a);
+            }
+        }
+        if (primeiro.startsWith(dijkstra) && segundo.startsWith(bfs)) {
+            String a = primeiro.substring(dijkstra.length());
+            String b = segundo.substring(bfs.length());
+            if (a.equals(b)) {
+                return "BFS = Dijkstra · " + nomeProtecaoBreve(a);
+            }
+        }
+        return primeiro + " = " + segundo;
+    }
+
+    private static int xImagem(double x, double minimo, double maximo, int esquerda, int largura) {
+        return esquerda + (int) Math.round((x - minimo) / (maximo - minimo) * largura);
+    }
+
+    private static int yImagem(double y, double maximo, int inferior, int altura) {
+        return inferior - (int) Math.round(y / maximo * altura);
+    }
+
+    public static void graficoLinhas(Path arq, String titulo, String xl, String yl,
+                                    List<Serie> series) throws IOException {
+        if (series.isEmpty()) {
+            throw new IOException("Não há séries para desenhar: " + titulo);
+        }
+
+        List<Serie> visiveis = new ArrayList<>();
+        List<String> nomes = new ArrayList<>();
+        for (Serie candidata : series) {
+            int igual = -1;
+            for (int i = 0; i < visiveis.size(); i++) {
+                if (mesmasCurvas(visiveis.get(i), candidata)) {
+                    igual = i;
+                    break;
+                }
+            }
+            if (igual < 0) {
+                visiveis.add(candidata);
+                nomes.add(nomeBreveSerie(candidata.nome));
+            } else {
+                // Ex.: BFS e Dijkstra têm a mesma probabilidade acumulada.
+                nomes.set(igual, nomeCurvasCoincidentes(nomes.get(igual),
+                        nomeBreveSerie(candidata.nome)));
+            }
+        }
+
+        int larguraImagem = 2000;
+        int alturaImagem = Math.max(1130, 620 + visiveis.size() * 42);
+        int esquerda = 220;
+        int superior = 157;
+        int inferior = alturaImagem - 165;
+        int alturaGrafico = inferior - superior;
+        int direita;
+        direita = 1440;
+        int larguraGrafico = direita - esquerda;
+
+        BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = nova(imagem);
+        tituloFigura(g, titulo, larguraImagem);
+
+        double minimoX = Double.POSITIVE_INFINITY;
+        double maximoX = Double.NEGATIVE_INFINITY;
+        double maximoY = 0;
+        for (Serie serie : visiveis) {
+            for (int i = 0; i < serie.x.length; i++) {
+                if (Double.isFinite(serie.x[i])) {
+                    minimoX = Math.min(minimoX, serie.x[i]);
+                    maximoX = Math.max(maximoX, serie.x[i]);
+                }
+                if (Double.isFinite(serie.y[i])) {
+                    maximoY = Math.max(maximoY, serie.y[i]);
+                }
+                if (serie.hi != null && Double.isFinite(serie.hi[i])) {
+                    maximoY = Math.max(maximoY, serie.hi[i]);
+                }
+            }
+        }
+        if (!Double.isFinite(minimoX)) {
+            minimoX = 0;
+            maximoX = 1;
+        }
+        if (maximoX <= minimoX) {
+            maximoX = minimoX + 1;
+        }
+        if (maximoY <= 0) {
+            maximoY = 1;
+        }
+
+        double passoY = passo(maximoY);
+        double tetoY = Math.ceil(maximoY / passoY) * passoY;
+        double passoX = passo(maximoX - minimoX);
+        String eixoX = xl.toLowerCase(Locale.ROOT);
+        if (eixoX.contains("dia") || eixoX.contains("estaç")) {
+            passoX = Math.max(1, Math.ceil(passoX));
+        }
+
+        // Fundo branco e divisões internas cinzas, com moldura preta completa.
+        g.setColor(Color.WHITE);
+        g.fillRect(esquerda, superior, larguraGrafico, alturaGrafico);
+        g.setFont(FONTE_NUMERO);
+        for (int i = 0; i <= 9; i++) {
+            double valor = i * passoY;
+            if (valor > tetoY + passoY * 1e-7) {
+                break;
+            }
+            int py = yImagem(valor, tetoY, inferior, alturaGrafico);
+            g.setColor(COR_GRADE);
+            g.setStroke(new BasicStroke(1.4f));
+            g.drawLine(esquerda, py, direita, py);
+            g.setColor(COR_TEXTO);
+            String numero = fmt(valor, passoY);
+            g.drawString(numero, esquerda - g.getFontMetrics().stringWidth(numero) - 19, py + 9);
+        }
+        for (double x = Math.ceil(minimoX / passoX) * passoX;
+                x <= maximoX + passoX * 1e-7; x += passoX) {
+            int px = xImagem(x, minimoX, maximoX, esquerda, larguraGrafico);
+            if (px < esquerda || px > direita) {
+                continue;
+            }
+            g.setColor(COR_GRADE);
+            g.setStroke(new BasicStroke(1.4f));
+            g.drawLine(px, superior, px, inferior);
+            g.setColor(COR_TEXTO);
+            String numero = fmt(x, passoX);
+            centralizar(g, numero, px, inferior + 43);
+        }
+
+        Shape recorteOriginal = g.getClip();
+        g.clipRect(esquerda, superior, larguraGrafico, alturaGrafico);
+        // Intervalo de percentis P5-P95 quando a série contém limites.
+        for (Serie serie : visiveis) {
+            if (serie.lo == null || serie.hi == null || serie.x.length < 2) {
+                continue;
+            }
+            Path2D faixa = new Path2D.Double();
+            for (int i = 0; i < serie.x.length; i++) {
+                int px = xImagem(serie.x[i], minimoX, maximoX, esquerda, larguraGrafico);
+                int py = yImagem(Math.max(0, serie.hi[i]), tetoY, inferior, alturaGrafico);
+                if (i == 0) {
+                    faixa.moveTo(px, py);
+                } else {
+                    faixa.lineTo(px, py);
+                }
+            }
+            for (int i = serie.x.length - 1; i >= 0; i--) {
+                int px = xImagem(serie.x[i], minimoX, maximoX, esquerda, larguraGrafico);
+                int py = yImagem(Math.max(0, serie.lo[i]), tetoY, inferior, alturaGrafico);
+                faixa.lineTo(px, py);
+            }
+            faixa.closePath();
+            g.setColor(new Color(serie.cor.getRed(), serie.cor.getGreen(), serie.cor.getBlue(), 36));
+            g.fill(faixa);
+        }
+
+        for (int indice = 0; indice < visiveis.size(); indice++) {
+            Serie serie = visiveis.get(indice);
+            if (serie.x.length == 0) {
+                continue;
+            }
+            Path2D caminho = new Path2D.Double();
+            for (int i = 0; i < serie.x.length; i++) {
+                int px = xImagem(serie.x[i], minimoX, maximoX, esquerda, larguraGrafico);
+                int py = yImagem(serie.y[i], tetoY, inferior, alturaGrafico);
+                if (i == 0) {
+                    caminho.moveTo(px, py);
+                } else {
+                    caminho.lineTo(px, py);
+                }
+            }
+            g.setColor(serie.cor);
+            g.setStroke(tracoSerie(indice, 4f));
+            g.draw(caminho);
+            int intervalo = Math.max(1, serie.x.length / 10);
+            for (int i = 0; i < serie.x.length; i += intervalo) {
+                int px = xImagem(serie.x[i], minimoX, maximoX, esquerda, larguraGrafico);
+                int py = yImagem(serie.y[i], tetoY, inferior, alturaGrafico);
+                marcadorSerie(g, indice, px, py, serie.cor);
+            }
+            int ultimo = serie.x.length - 1;
+            if (ultimo % intervalo != 0) {
+                int px = xImagem(serie.x[ultimo], minimoX, maximoX, esquerda, larguraGrafico);
+                int py = yImagem(serie.y[ultimo], tetoY, inferior, alturaGrafico);
+                marcadorSerie(g, indice, px, py, serie.cor);
+            }
+        }
+        g.setClip(recorteOriginal);
+
+        g.setColor(COR_BORDA);
+        g.setStroke(new BasicStroke(2.3f));
+        g.drawRect(esquerda, superior, larguraGrafico, alturaGrafico);
+
+        g.setFont(FONTE_EIXO);
+        g.setColor(COR_TEXTO);
+        centralizar(g, xl, esquerda + larguraGrafico / 2, alturaImagem - 64);
+        g.rotate(-Math.PI / 2);
+        centralizar(g, yl, -(superior + alturaGrafico / 2), 61);
+        g.rotate(Math.PI / 2);
+
+        // Legenda superior direita; para muitas curvas, usa a margem lateral.
+        // Reserva espaço para que a caixa da legenda nunca cubra as curvas.
+        int legendaX = direita + 24;
+        int legendaY = superior + 20;
+        int legendaLargura = larguraImagem - legendaX - 24;
+        int alturaLinha = 48;
+        int alturaLegenda = 28 + visiveis.size() * alturaLinha;
+        g.setColor(new Color(255, 255, 255, 239));
+        g.fillRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
+        g.setColor(new Color(151, 151, 151));
+        g.setStroke(new BasicStroke(1.4f));
+        g.drawRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
+        g.setFont(FONTE_LEGENDA);
+        for (int i = 0; i < visiveis.size(); i++) {
+            int ly = legendaY + 33 + i * alturaLinha;
+            Color cor = visiveis.get(i).cor;
+            g.setColor(cor);
+            g.setStroke(tracoSerie(i, 3.7f));
+            g.drawLine(legendaX + 17, ly - 8, legendaX + 72, ly - 8);
+            marcadorSerie(g, i, legendaX + 45, ly - 8, cor);
+            g.setColor(COR_TEXTO);
+            g.drawString(abreviar(g, nomes.get(i), legendaLargura - 107), legendaX + 89, ly);
+        }
 
         g.dispose();
-        ImageIO.write(img, "png", arq.toFile());
+        ImageIO.write(imagem, "png", arq.toFile());
+    }
+
+    // Uma escala contínua de azuis substitui as cores independentes do ranking.
+    private static Color corBarraAzul(int indice, int quantidade) {
+        double proporcao = 0;
+        if (quantidade > 1) {
+            proporcao = (double) indice / (quantidade - 1);
+        }
+        int vermelho = (int) Math.round(24 + 87 * proporcao);
+        int verde = (int) Math.round(68 + 107 * proporcao);
+        int azul = (int) Math.round(139 + 80 * proporcao);
+        return new Color(vermelho, verde, azul);
+    }
+
+    public static void graficoBarras(Path arq, String titulo, String eixo,
+                                     List<String> rotulos, double[] valores) throws IOException {
+        if (rotulos.size() != valores.length) {
+            throw new IOException("As quantidades de rótulos e valores são diferentes.");
+        }
+        int quantidade = rotulos.size();
+        int espaco = 71;
+        if (quantidade <= 6) {
+            espaco = 96;
+        }
+        int larguraImagem = 2000;
+        int alturaImagem = Math.max(900, 295 + quantidade * espaco);
+        int esquerda = 760;
+        int superior = 160;
+        int inferior = superior + quantidade * espaco;
+        int larguraGrafico = 1060;
+
+        BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = nova(imagem);
+        tituloFigura(g, titulo, larguraImagem);
+
+        double maximo = 0;
+        for (double valor : valores) {
+            if (Double.isFinite(valor)) {
+                maximo = Math.max(maximo, valor);
+            }
+        }
+        if (maximo <= 0) {
+            maximo = 1;
+        }
+        double intervalo = passo(maximo * 1.20);
+        double teto = Math.ceil(maximo * 1.20 / intervalo) * intervalo;
+
+        g.setColor(Color.WHITE);
+        g.fillRect(esquerda, superior, larguraGrafico, quantidade * espaco);
+        g.setFont(FONTE_NUMERO);
+        for (int i = 0; i <= 10; i++) {
+            double valor = i * intervalo;
+            if (valor > teto + intervalo * 1e-7) {
+                break;
+            }
+            int px = esquerda + (int) Math.round(valor / teto * larguraGrafico);
+            g.setColor(COR_GRADE);
+            g.setStroke(new BasicStroke(1.3f));
+            g.drawLine(px, superior, px, inferior);
+            g.setColor(COR_TEXTO);
+            centralizar(g, fmt(valor, intervalo), px, inferior + 42);
+        }
+
+        g.setColor(COR_GRADE);
+        g.setStroke(new BasicStroke(1.0f));
+        for (int i = 1; i < quantidade; i++) {
+            int py = superior + i * espaco;
+            g.drawLine(esquerda, py, esquerda + larguraGrafico, py);
+        }
+
+        g.setFont(FONTE_NUMERO);
+        for (int i = 0; i < quantidade; i++) {
+            int y = superior + i * espaco;
+            String nome = abreviar(g, rotulos.get(i), esquerda - 140);
+            g.setColor(COR_TEXTO);
+            g.drawString(nome, esquerda - g.getFontMetrics().stringWidth(nome) - 24,
+                    y + espaco / 2 + 9);
+
+            double valor = valores[i];
+            int tamanho = (int) Math.round(Math.max(0, valor) / teto * larguraGrafico);
+            Color azul = corBarraAzul(i, quantidade);
+            Color azulClaro = new Color(Math.min(255, azul.getRed() + 42),
+                    Math.min(255, azul.getGreen() + 42), Math.min(255, azul.getBlue() + 28));
+            if (tamanho > 0) {
+                g.setPaint(new GradientPaint(esquerda, y, azul, esquerda + Math.max(tamanho, 1), y, azulClaro));
+                g.fillRoundRect(esquerda, y + 14, tamanho, espaco - 28, 9, 9);
+            }
+            g.setColor(COR_TEXTO);
+            g.setFont(FONTE_NUMERO);
+            String exibicao = fmt(valor, intervalo);
+            if (eixo.startsWith("%")) {
+                exibicao += "%";
+            }
+            g.drawString(exibicao, esquerda + tamanho + 16, y + espaco / 2 + 9);
+        }
+
+        g.setColor(COR_BORDA);
+        g.setStroke(new BasicStroke(2.2f));
+        g.drawRect(esquerda, superior, larguraGrafico, quantidade * espaco);
+        g.setColor(COR_TEXTO);
+        g.setFont(FONTE_EIXO);
+        centralizar(g, eixo, esquerda + larguraGrafico / 2, alturaImagem - 54);
+        g.dispose();
+        ImageIO.write(imagem, "png", arq.toFile());
     }
 
     private double[][] layout() {
@@ -1375,73 +1778,181 @@ public class MalhaMetroferroviaria {
                 (int) (u[2] + (v[2] - u[2]) * proporcao));
     }
 
-    /* Mapa da rede (layout força-dirigida: sem coordenadas geográficas). Cor = valor/vmax; tamanho = demanda do mês. */
-    public void mapa(Path arq, String titulo, double[] valor, double vmax, String legenda,
+    /*
+     * Mapa esquemático da rede, sem coordenadas geográficas.
+     * Cor do nó = valor do indicador; tamanho do nó = demanda mensal.
+     */
+    public void mapa(Path arq, String titulo, double[] valores, double maximo,
+                     String legenda, Collection<Integer> sementes, int mes) throws IOException {
+        double[][] coordenadas = layout();
+        Rede rede = rede(mes, 0);
+        int larguraImagem = 2000;
+        int alturaImagem = 1250;
+        int esquerda = 92;
+        int superior = 153;
+        int larguraMapa = 1390;
+        int alturaMapa = 960;
+        int direitaMapa = esquerda + larguraMapa;
+        int inferiorMapa = superior + alturaMapa;
 
-                     Collection<Integer> destaque, int mes) throws IOException {
+        BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = nova(imagem);
+        tituloFigura(g, titulo, larguraImagem);
 
-        double[][] p = layout(); Rede r = rede(mes, 0);
-        int W = 1300, H = 950, m = 70;
-
-        BufferedImage img = new BufferedImage(W, H, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = nova(img);
-        for (int i = 0; i < nos.size(); i++) for (int[] e : adj.get(i)) {
-            int j = e[0]; if (j < i) continue;
-            if (e[1] == 1) {
-                g.setColor(new Color(255, 140, 0, 170));
-                g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND,
-                        BasicStroke.JOIN_ROUND, 1f, new float[]{5f, 4f}, 0f));
-            } else {
-                g.setColor(new Color(150, 150, 150, 160));
-                g.setStroke(new BasicStroke(1.3f));
-            }
-            g.drawLine((int) (m + p[i][0] * (W - 2 * m)), (int) (m + p[i][1] * (H - 2 * m)), (int) (m + p[j][0] * (W - 2 * m)), (int) (m + p[j][1] * (H - 2 * m)));
-
+        // Região do mapa com fundo branco, grade discreta e quatro bordas pretas.
+        g.setColor(Color.WHITE);
+        g.fillRect(esquerda, superior, larguraMapa, alturaMapa);
+        g.setColor(COR_GRADE);
+        g.setStroke(new BasicStroke(1.2f));
+        for (int i = 1; i < 10; i++) {
+            int x = esquerda + larguraMapa * i / 10;
+            g.drawLine(x, superior, x, inferiorMapa);
         }
-        Integer[] ordem = new Integer[nos.size()]; for (int i = 0; i < ordem.length; i++) ordem[i] = i;
-
-        Arrays.sort(ordem, (a, b) -> Double.compare(valor[b], valor[a]));
-        Set<Integer> rotular = new HashSet<>(); for (int i = 0; i < Math.min(8, ordem.length); i++) rotular.add(ordem[i]);
-
-        if (destaque != null) rotular.addAll(destaque);
-        g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-
-        for (int i = 0; i < nos.size(); i++) {
-            int cx = (int) (m + p[i][0] * (W - 2 * m)), cy = (int) (m + p[i][1] * (H - 2 * m));
-            int rad = (int) (4 + 9 * Math.sqrt(r.w[i]));
-            double corValor = 0;
-            if (vmax > 0) {
-                corValor = valor[i] / vmax;
-            }
-            g.setColor(gradiente(corValor));
-            g.fillOval(cx - rad, cy - rad, 2 * rad, 2 * rad);
-
-            boolean selecionado = destaque != null && destaque.contains(i);
-            if (selecionado) {
-                g.setColor(Color.BLACK);
-                g.setStroke(new BasicStroke(3f));
-            } else {
-                g.setColor(new Color(60, 60, 60));
-                g.setStroke(new BasicStroke(1f));
-            }
-
-            g.drawOval(cx - rad, cy - rad, 2 * rad, 2 * rad);
-            if (rotular.contains(i)) { g.setColor(Color.BLACK); g.drawString(nos.get(i).estacao, cx + rad + 3, cy - 3); }
+        for (int i = 1; i < 8; i++) {
+            int y = superior + alturaMapa * i / 8;
+            g.drawLine(esquerda, y, direitaMapa, y);
         }
-        g.setStroke(new BasicStroke(1f));
-        g.setFont(new Font("SansSerif", Font.BOLD, 16)); g.setColor(Color.BLACK); g.drawString(titulo, 20, 28);
-        g.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        g.drawString("Tamanho = demanda do mês | contorno preto = semente | linha tracejada = baldeação | layout esquemático (sem coordenadas reais)", 20, 48);
-        g.setPaint(new GradientPaint(W - 260, H - 40, gradiente(0), W - 60, H - 40, gradiente(1)));
-        g.fillRect(W - 260, H - 45, 200, 14);
 
-        g.setColor(Color.BLACK); g.drawRect(W - 260, H - 45, 200, 14);
+        int total = nos.size();
+        int[] cx = new int[total];
+        int[] cy = new int[total];
+        int[] raios = new int[total];
+        for (int i = 0; i < total; i++) {
+            // A margem interna impede que as estações toquem a borda.
+            cx[i] = esquerda + 54 + (int) Math.round(coordenadas[i][0] * (larguraMapa - 108));
+            cy[i] = superior + 54 + (int) Math.round(coordenadas[i][1] * (alturaMapa - 108));
+            raios[i] = (int) Math.round(6 + 9 * Math.sqrt(rede.w[i]));
+        }
 
-        g.drawString("0", W - 260, H - 12); String vm = String.format(Locale.US, "%.3g", vmax);
+        // Ligações na mesma linha: cinza. Baldeações explícitas: laranja tracejado.
+        for (int i = 0; i < total; i++) {
+            for (int[] aresta : adj.get(i)) {
+                int j = aresta[0];
+                if (j <= i) {
+                    continue;
+                }
+                if (aresta[1] == 1) {
+                    g.setColor(new Color(216, 113, 37, 190));
+                    g.setStroke(new BasicStroke(2.3f, BasicStroke.CAP_ROUND,
+                            BasicStroke.JOIN_ROUND, 1f, new float[]{10f, 7f}, 0f));
+                } else {
+                    g.setColor(new Color(159, 159, 159, 180));
+                    g.setStroke(new BasicStroke(1.7f));
+                }
+                g.drawLine(cx[i], cy[i], cx[j], cy[j]);
+            }
+        }
 
-        g.drawString(vm, W - 60 - g.getFontMetrics().stringWidth(vm), H - 12); g.drawString(legenda, W - 260, H - 52);
+        Integer[] ordem = new Integer[total];
+        for (int i = 0; i < total; i++) {
+            ordem[i] = i;
+        }
+        Arrays.sort(ordem, (a, b) -> Double.compare(valores[b], valores[a]));
+
+        // A identificação fica na legenda lateral em vez de sobrepor nomes extensos aos nós.
+        List<Integer> identificados = new ArrayList<>();
+        for (int i = 0; i < Math.min(8, total); i++) {
+            identificados.add(ordem[i]);
+        }
+        if (sementes != null) {
+            for (int id : sementes) {
+                if (!identificados.contains(id)) {
+                    identificados.add(id);
+                }
+            }
+        }
+        for (int i = 0; i < total; i++) {
+            double proporcao = 0;
+            if (maximo > 0) {
+                proporcao = valores[i] / maximo;
+            }
+            g.setColor(gradiente(proporcao));
+            g.fillOval(cx[i] - raios[i], cy[i] - raios[i], 2 * raios[i], 2 * raios[i]);
+
+            boolean semente = sementes != null && sementes.contains(i);
+            g.setColor(COR_TEXTO);
+            if (semente) {
+                g.setStroke(new BasicStroke(3.5f));
+            } else {
+                g.setStroke(new BasicStroke(1.0f));
+            }
+            g.drawOval(cx[i] - raios[i], cy[i] - raios[i], 2 * raios[i], 2 * raios[i]);
+        }
+
+        g.setFont(new Font("SansSerif", Font.BOLD, 19));
+        for (int i = 0; i < identificados.size(); i++) {
+            int id = identificados.get(i);
+            g.setColor(Color.WHITE);
+            int nx = cx[id] + raios[id] + 4;
+            int ny = cy[id] - raios[id] - 4;
+            g.fillRoundRect(nx - 2, ny - 19, 36, 26, 6, 6);
+            g.setColor(COR_TEXTO);
+            g.drawString(String.valueOf(i + 1), nx + 3, ny);
+        }
+
+        g.setColor(COR_BORDA);
+        g.setStroke(new BasicStroke(2.4f));
+        g.drawRect(esquerda, superior, larguraMapa, alturaMapa);
+
+        int painelX = 1524;
+        g.setColor(COR_TEXTO);
+        g.setFont(new Font("SansSerif", Font.BOLD, 28));
+        g.drawString("Estações destacadas", painelX, superior + 18);
+        g.setFont(new Font("SansSerif", Font.PLAIN, 22));
+        int passoLinha = 43;
+        for (int i = 0; i < identificados.size(); i++) {
+            int id = identificados.get(i);
+            int py = superior + 63 + i * passoLinha;
+            double proporcao = 0;
+            if (maximo > 0) {
+                proporcao = valores[id] / maximo;
+            }
+            g.setColor(gradiente(proporcao));
+            g.fillOval(painelX, py - 17, 18, 18);
+            g.setColor(COR_TEXTO);
+            String descricao = (i + 1) + ". " + nos.get(id).estacao + " (" + nos.get(id).linhaChave + ")";
+            g.drawString(abreviar(g, descricao, larguraImagem - painelX - 38), painelX + 27, py);
+        }
+
+        int legendaY = Math.max(superior + 63 + identificados.size() * passoLinha + 25, 900);
+        g.setColor(COR_TEXTO);
+        g.setFont(new Font("SansSerif", Font.BOLD, 24));
+        g.drawString(abreviar(g, legenda, larguraImagem - painelX - 32), painelX, legendaY);
+        int larguraEscala = 385;
+        int escalaY = legendaY + 19;
+        for (int i = 0; i < larguraEscala; i++) {
+            g.setColor(gradiente((double) i / Math.max(1, larguraEscala - 1)));
+            g.drawLine(painelX + i, escalaY, painelX + i, escalaY + 24);
+        }
+        g.setColor(COR_BORDA);
+        g.setStroke(new BasicStroke(1.6f));
+        g.drawRect(painelX, escalaY, larguraEscala, 24);
+        g.setFont(new Font("SansSerif", Font.PLAIN, 21));
+        g.drawString("0", painelX, escalaY + 54);
+        String maximoFormatado = fmt(maximo, passo(Math.max(1, maximo)));
+        g.drawString(maximoFormatado,
+                painelX + larguraEscala - g.getFontMetrics().stringWidth(maximoFormatado),
+                escalaY + 54);
+
+        // Uma legenda curta explica a codificação sem sobrecarregar a figura.
+        g.setColor(new Color(155, 155, 155));
+        g.setStroke(new BasicStroke(2f));
+        g.drawLine(painelX, escalaY + 104, painelX + 45, escalaY + 104);
+        g.setColor(COR_TEXTO);
+        g.drawString("Trecho da linha", painelX + 57, escalaY + 111);
+        g.setColor(new Color(216, 113, 37));
+        g.setStroke(new BasicStroke(2.6f, BasicStroke.CAP_ROUND,
+                BasicStroke.JOIN_ROUND, 1f, new float[]{10f, 7f}, 0f));
+        g.drawLine(painelX, escalaY + 148, painelX + 45, escalaY + 148);
+        g.setColor(COR_TEXTO);
+        g.drawString("Baldeação", painelX + 57, escalaY + 155);
+
+        g.setFont(new Font("SansSerif", Font.PLAIN, 21));
+        centralizar(g, "Layout esquemático · tamanho dos nós proporcional à demanda",
+                esquerda + larguraMapa / 2, alturaImagem - 67);
         g.dispose();
-        ImageIO.write(img, "png", arq.toFile());
+        ImageIO.write(imagem, "png", arq.toFile());
     }
 
     public static double[] seq(int n) { double[] x = new double[n]; for (int i = 0; i < n; i++) x[i] = i; return x; }
