@@ -1183,14 +1183,24 @@ public class MalhaMetroferroviaria {
             new Color(23, 190, 207), new Color(188, 189, 34), new Color(127, 127, 127), new Color(0, 0, 0), new Color(102, 194, 165)};
 
     // ----------------------------------------------------------------- apresentação das figuras
-    private static final Color COR_TEXTO = new Color(25, 25, 25);
-    private static final Color COR_GRADE = new Color(216, 216, 216);
+    private static final Color COR_TEXTO = new Color(35, 35, 35);
+    private static final Color COR_GRADE = new Color(207, 207, 207);
     private static final Color COR_BORDA = Color.BLACK;
-    private static final Font FONTE_TITULO = new Font("SansSerif", Font.BOLD, 38);
-    private static final Font FONTE_SUBTITULO = new Font("SansSerif", Font.PLAIN, 27);
-    private static final Font FONTE_EIXO = new Font("SansSerif", Font.BOLD, 31);
-    private static final Font FONTE_NUMERO = new Font("SansSerif", Font.PLAIN, 26);
-    private static final Font FONTE_LEGENDA = new Font("SansSerif", Font.PLAIN, 23);
+    private static final Font FONTE_TITULO = new Font("SansSerif", Font.BOLD, 37);
+    private static final Font FONTE_SUBTITULO = new Font("SansSerif", Font.PLAIN, 29);
+    private static final Font FONTE_EIXO = new Font("SansSerif", Font.BOLD, 34);
+    private static final Font FONTE_NUMERO = new Font("SansSerif", Font.PLAIN, 29);
+    private static final Font FONTE_LEGENDA = new Font("SansSerif", Font.PLAIN, 27);
+
+    // Cores usadas no exemplo aprovado (vermelho, azul, verde, laranja etc.).
+    private static final Color[] CORES_CIENTIFICAS = {
+            new Color(220, 20, 60), new Color(65, 105, 225),
+            new Color(34, 139, 34), new Color(255, 140, 0),
+            new Color(148, 0, 211), new Color(0, 139, 139),
+            new Color(205, 92, 92), new Color(85, 107, 47),
+            new Color(70, 130, 180), new Color(160, 82, 45),
+            new Color(199, 21, 133), new Color(46, 139, 87)
+    };
 
     private static double passo(double intervalo) {
         if (!Double.isFinite(intervalo) || intervalo <= 0) {
@@ -1269,14 +1279,14 @@ public class MalhaMetroferroviaria {
         g.setColor(COR_TEXTO);
         String principal = abreviar(g, partes[0], largura - 140);
         int centro = largura / 2;
-        centralizar(g, principal, centro, 58);
+        centralizar(g, principal, centro, 66);
         int comprimento = g.getFontMetrics().stringWidth(principal);
         g.setStroke(new BasicStroke(2f));
-        g.drawLine(centro - comprimento / 2, 66, centro + comprimento / 2, 66);
+        g.drawLine(centro - comprimento / 2, 73, centro + comprimento / 2, 73);
         if (!partes[1].isEmpty()) {
             g.setFont(FONTE_SUBTITULO);
             String complemento = abreviar(g, partes[1], largura - 140);
-            centralizar(g, complemento, centro, 104);
+            centralizar(g, complemento, centro, 123);
         }
     }
 
@@ -1400,6 +1410,42 @@ public class MalhaMetroferroviaria {
         return primeiro + " = " + segundo;
     }
 
+    // A indicação completa do contexto continua no CSV e nos metadados.
+    // No gráfico, rótulos curtos preservam espaço para os valores.
+    private static String rotuloEixo(String eixo) {
+        if (eixo.equals("Nº de estações percorridas")) {
+            return "Estações percorridas";
+        }
+        if (eixo.startsWith("P acumulada (condicionada")) {
+            return "Probabilidade acumulada";
+        }
+        if (eixo.startsWith("Nº de pessoas infecciosas")) {
+            return "Pessoas infecciosas";
+        }
+        if (eixo.equals("Nº de nós alcançados")) {
+            return "Estações alcançadas";
+        }
+        return eixo;
+    }
+
+    // Quantos pontos de séries cairiam atrás de uma legenda nesta posição?
+    // A escolha afeta somente o desenho, nunca os dados da simulação.
+    private static int interferenciasLegenda(List<Serie> series, int x, int y, int largura, int altura,
+                                              double xMin, double xMax, double yMax,
+                                              int esquerda, int inferior, int larguraPlot, int alturaPlot) {
+        int total = 0;
+        for (Serie serie : series) {
+            for (int i = 0; i < serie.x.length; i++) {
+                int px = xImagem(serie.x[i], xMin, xMax, esquerda, larguraPlot);
+                int py = yImagem(serie.y[i], yMax, inferior, alturaPlot);
+                if (px >= x && px <= x + largura && py >= y && py <= y + altura) {
+                    total++;
+                }
+            }
+        }
+        return total;
+    }
+
     private static int xImagem(double x, double minimo, double maximo, int esquerda, int largura) {
         return esquerda + (int) Math.round((x - minimo) / (maximo - minimo) * largura);
     }
@@ -1434,14 +1480,19 @@ public class MalhaMetroferroviaria {
             }
         }
 
-        int larguraImagem = 2000;
-        int alturaImagem = Math.max(1130, 620 + visiveis.size() * 42);
-        int esquerda = 220;
-        int superior = 157;
-        int inferior = alturaImagem - 165;
+        int larguraImagem = 2100;
+        int alturaImagem = Math.max(1160, 610 + visiveis.size() * 47);
+        int esquerda = 210;
+        int superior = 188;
+        int inferior = alturaImagem - 195;
         int alturaGrafico = inferior - superior;
-        int direita;
-        direita = 1440;
+        // Com poucas series a legenda fica dentro da figura, como no modelo aprovado.
+        // Para muitas series usa-se a faixa direita para evitar encobrir as curvas.
+        boolean legendaExterna = visiveis.size() > 7;
+        int direita = 1850;
+        if (legendaExterna) {
+            direita = 1480;
+        }
         int larguraGrafico = direita - esquerda;
 
         BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
@@ -1496,11 +1547,11 @@ public class MalhaMetroferroviaria {
             }
             int py = yImagem(valor, tetoY, inferior, alturaGrafico);
             g.setColor(COR_GRADE);
-            g.setStroke(new BasicStroke(1.4f));
+            g.setStroke(new BasicStroke(1.2f));
             g.drawLine(esquerda, py, direita, py);
             g.setColor(COR_TEXTO);
             String numero = fmt(valor, passoY);
-            g.drawString(numero, esquerda - g.getFontMetrics().stringWidth(numero) - 19, py + 9);
+            g.drawString(numero, esquerda - g.getFontMetrics().stringWidth(numero) - 19, py + 10);
         }
         for (double x = Math.ceil(minimoX / passoX) * passoX;
                 x <= maximoX + passoX * 1e-7; x += passoX) {
@@ -1509,11 +1560,11 @@ public class MalhaMetroferroviaria {
                 continue;
             }
             g.setColor(COR_GRADE);
-            g.setStroke(new BasicStroke(1.4f));
+            g.setStroke(new BasicStroke(1.2f));
             g.drawLine(px, superior, px, inferior);
             g.setColor(COR_TEXTO);
             String numero = fmt(x, passoX);
-            centralizar(g, numero, px, inferior + 43);
+            centralizar(g, numero, px, inferior + 47);
         }
 
         Shape recorteOriginal = g.getClip();
@@ -1539,7 +1590,8 @@ public class MalhaMetroferroviaria {
                 faixa.lineTo(px, py);
             }
             faixa.closePath();
-            g.setColor(new Color(serie.cor.getRed(), serie.cor.getGreen(), serie.cor.getBlue(), 36));
+            Color cor = CORES_CIENTIFICAS[visiveis.indexOf(serie) % CORES_CIENTIFICAS.length];
+            g.setColor(new Color(cor.getRed(), cor.getGreen(), cor.getBlue(), 34));
             g.fill(faixa);
         }
 
@@ -1558,57 +1610,83 @@ public class MalhaMetroferroviaria {
                     caminho.lineTo(px, py);
                 }
             }
-            g.setColor(serie.cor);
-            g.setStroke(tracoSerie(indice, 4f));
+            Color cor = CORES_CIENTIFICAS[indice % CORES_CIENTIFICAS.length];
+            g.setColor(cor);
+            g.setStroke(tracoSerie(indice, 3.6f));
             g.draw(caminho);
             int intervalo = Math.max(1, serie.x.length / 10);
             for (int i = 0; i < serie.x.length; i += intervalo) {
                 int px = xImagem(serie.x[i], minimoX, maximoX, esquerda, larguraGrafico);
                 int py = yImagem(serie.y[i], tetoY, inferior, alturaGrafico);
-                marcadorSerie(g, indice, px, py, serie.cor);
+                marcadorSerie(g, indice, px, py, cor);
             }
             int ultimo = serie.x.length - 1;
             if (ultimo % intervalo != 0) {
                 int px = xImagem(serie.x[ultimo], minimoX, maximoX, esquerda, larguraGrafico);
                 int py = yImagem(serie.y[ultimo], tetoY, inferior, alturaGrafico);
-                marcadorSerie(g, indice, px, py, serie.cor);
+                marcadorSerie(g, indice, px, py, cor);
             }
         }
         g.setClip(recorteOriginal);
 
         g.setColor(COR_BORDA);
-        g.setStroke(new BasicStroke(2.3f));
+        g.setStroke(new BasicStroke(2.2f));
         g.drawRect(esquerda, superior, larguraGrafico, alturaGrafico);
 
         g.setFont(FONTE_EIXO);
         g.setColor(COR_TEXTO);
-        centralizar(g, xl, esquerda + larguraGrafico / 2, alturaImagem - 64);
+        centralizar(g, rotuloEixo(xl), esquerda + larguraGrafico / 2, alturaImagem - 68);
         g.rotate(-Math.PI / 2);
-        centralizar(g, yl, -(superior + alturaGrafico / 2), 61);
+        centralizar(g, rotuloEixo(yl), -(superior + alturaGrafico / 2), 61);
         g.rotate(Math.PI / 2);
 
-        // Legenda superior direita; para muitas curvas, usa a margem lateral.
-        // Reserva espaço para que a caixa da legenda nunca cubra as curvas.
-        int legendaX = direita + 24;
-        int legendaY = superior + 20;
-        int legendaLargura = larguraImagem - legendaX - 24;
-        int alturaLinha = 48;
-        int alturaLegenda = 28 + visiveis.size() * alturaLinha;
-        g.setColor(new Color(255, 255, 255, 239));
-        g.fillRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
-        g.setColor(new Color(151, 151, 151));
-        g.setStroke(new BasicStroke(1.4f));
-        g.drawRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
+        // Legenda técnica como no gráfico de referência: dentro do quadrante superior direito.
+        // Quando há muitas curvas, a legenda fica na margem para não ocultar resultados.
         g.setFont(FONTE_LEGENDA);
+        int alturaLinha = 43;
+        int margemLegenda = 20;
+        int textoMaximo = 0;
+        for (String nome : nomes) {
+            textoMaximo = Math.max(textoMaximo, g.getFontMetrics().stringWidth(nome));
+        }
+        int legendaLargura = textoMaximo + 137;
+        if (legendaExterna) {
+            legendaLargura = Math.min(legendaLargura, larguraImagem - direita - 45);
+        } else {
+            legendaLargura = Math.min(legendaLargura, larguraGrafico - 55);
+        }
+        int legendaX = direita - legendaLargura - 18;
+        if (legendaExterna) {
+            legendaX = direita + 24;
+        }
+        int legendaY = superior + 18;
+        int alturaLegenda = 2 * margemLegenda + visiveis.size() * alturaLinha;
+        if (!legendaExterna) {
+            int esquerdaAlternativa = esquerda + 18;
+            int interferenciasDireita = interferenciasLegenda(visiveis, legendaX, legendaY,
+                    legendaLargura, alturaLegenda, minimoX, maximoX, tetoY,
+                    esquerda, inferior, larguraGrafico, alturaGrafico);
+            int interferenciasEsquerda = interferenciasLegenda(visiveis, esquerdaAlternativa, legendaY,
+                    legendaLargura, alturaLegenda, minimoX, maximoX, tetoY,
+                    esquerda, inferior, larguraGrafico, alturaGrafico);
+            if (interferenciasDireita >= 3 && interferenciasEsquerda < interferenciasDireita) {
+                legendaX = esquerdaAlternativa;
+            }
+        }
+        g.setColor(new Color(255, 255, 255, 225));
+        g.fillRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
+        g.setColor(Color.BLACK);
+        g.setStroke(new BasicStroke(1.2f));
+        g.drawRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
         for (int i = 0; i < visiveis.size(); i++) {
-            int ly = legendaY + 33 + i * alturaLinha;
-            Color cor = visiveis.get(i).cor;
+            int ly = legendaY + margemLegenda + 25 + i * alturaLinha;
+            Color cor = CORES_CIENTIFICAS[i % CORES_CIENTIFICAS.length];
             g.setColor(cor);
-            g.setStroke(tracoSerie(i, 3.7f));
-            g.drawLine(legendaX + 17, ly - 8, legendaX + 72, ly - 8);
-            marcadorSerie(g, i, legendaX + 45, ly - 8, cor);
+            g.setStroke(tracoSerie(i, 3.0f));
+            g.drawLine(legendaX + 16, ly - 7, legendaX + 62, ly - 7);
+            marcadorSerie(g, i, legendaX + 39, ly - 7, cor);
             g.setColor(COR_TEXTO);
-            g.drawString(abreviar(g, nomes.get(i), legendaLargura - 107), legendaX + 89, ly);
+            g.drawString(abreviar(g, nomes.get(i), legendaLargura - 108), legendaX + 81, ly);
         }
 
         g.dispose();
@@ -1616,14 +1694,13 @@ public class MalhaMetroferroviaria {
     }
 
     // Uma escala contínua de azuis substitui as cores independentes do ranking.
-    private static Color corBarraAzul(int indice, int quantidade) {
-        double proporcao = 0;
-        if (quantidade > 1) {
-            proporcao = (double) indice / (quantidade - 1);
-        }
-        int vermelho = (int) Math.round(24 + 87 * proporcao);
-        int verde = (int) Math.round(68 + 107 * proporcao);
-        int azul = (int) Math.round(139 + 80 * proporcao);
+    // Cor continua entre azul claro (menor valor) e escuro (maior valor).
+    private static Color corBarraAzul(double proporcao) {
+        Color azulClaro = new Color(146, 200, 240);
+        Color azulEscuro = new Color(12, 72, 150);
+        int vermelho = (int) Math.round(azulClaro.getRed() + proporcao * (azulEscuro.getRed() - azulClaro.getRed()));
+        int verde = (int) Math.round(azulClaro.getGreen() + proporcao * (azulEscuro.getGreen() - azulClaro.getGreen()));
+        int azul = (int) Math.round(azulClaro.getBlue() + proporcao * (azulEscuro.getBlue() - azulClaro.getBlue()));
         return new Color(vermelho, verde, azul);
     }
 
@@ -1633,21 +1710,18 @@ public class MalhaMetroferroviaria {
             throw new IOException("As quantidades de rótulos e valores são diferentes.");
         }
         int quantidade = rotulos.size();
-        int espaco = 71;
-        if (quantidade <= 6) {
-            espaco = 96;
+        if (quantidade == 0) {
+            throw new IOException("Não há valores para desenhar o gráfico de barras.");
         }
-        int larguraImagem = 2000;
-        int alturaImagem = Math.max(900, 295 + quantidade * espaco);
-        int esquerda = 760;
-        int superior = 160;
-        int inferior = superior + quantidade * espaco;
-        int larguraGrafico = 1060;
 
-        BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
-                BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = nova(imagem);
-        tituloFigura(g, titulo, larguraImagem);
+        int espaco = 78;
+        if (quantidade <= 6) {
+            espaco = 108;
+        }
+        int superior = 194;
+        int alturaGrafico = quantidade * espaco;
+        int inferior = superior + alturaGrafico;
+        int alturaImagem = Math.max(750, inferior + 165);
 
         double maximo = 0;
         for (double valor : valores) {
@@ -1658,11 +1732,48 @@ public class MalhaMetroferroviaria {
         if (maximo <= 0) {
             maximo = 1;
         }
-        double intervalo = passo(maximo * 1.20);
-        double teto = Math.ceil(maximo * 1.20 / intervalo) * intervalo;
+        double intervalo = passo(maximo);
+        double teto = Math.ceil(maximo / intervalo) * intervalo;
+        if (teto <= maximo) {
+            teto += intervalo;
+        }
 
+        // Medimos os textos antes de criar a imagem para preservar os nomes completos.
+        // Esta margem se adapta automaticamente às linhas e estações mais longas.
+        BufferedImage amostra = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        Graphics2D medidas = nova(amostra);
+        medidas.setFont(FONTE_NUMERO);
+        int maiorRotulo = 0;
+        for (String rotulo : rotulos) {
+            maiorRotulo = Math.max(maiorRotulo, medidas.getFontMetrics().stringWidth(rotulo));
+        }
+        int esquerda = Math.max(800, maiorRotulo + 130);
+        int larguraGrafico = 950;
+
+        // A margem à direita é reservada aos números desenhados fora das barras.
+        // Ela evita cortes mesmo se o maior valor terminar perto da moldura.
+        Font fonteValores = new Font("SansSerif", Font.PLAIN, 29);
+        medidas.setFont(fonteValores);
+        int maiorNumero = 0;
+        for (double valor : valores) {
+            String numero = fmt(valor, intervalo);
+            if (eixo.startsWith("%")) {
+                numero += "%";
+            }
+            maiorNumero = Math.max(maiorNumero, medidas.getFontMetrics().stringWidth(numero));
+        }
+        medidas.dispose();
+        int margemDireita = Math.max(190, maiorNumero + 115);
+        int larguraImagem = Math.max(2100, esquerda + larguraGrafico + margemDireita);
+
+        BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = nova(imagem);
+        tituloFigura(g, titulo, larguraImagem);
+
+        // Fundo branco com linhas de grade cinza e contorno preto nos quatro lados.
         g.setColor(Color.WHITE);
-        g.fillRect(esquerda, superior, larguraGrafico, quantidade * espaco);
+        g.fillRect(esquerda, superior, larguraGrafico, alturaGrafico);
         g.setFont(FONTE_NUMERO);
         for (int i = 0; i <= 10; i++) {
             double valor = i * intervalo;
@@ -1674,48 +1785,41 @@ public class MalhaMetroferroviaria {
             g.setStroke(new BasicStroke(1.3f));
             g.drawLine(px, superior, px, inferior);
             g.setColor(COR_TEXTO);
-            centralizar(g, fmt(valor, intervalo), px, inferior + 42);
+            centralizar(g, fmt(valor, intervalo), px, inferior + 44);
         }
 
-        g.setColor(COR_GRADE);
-        g.setStroke(new BasicStroke(1.0f));
-        for (int i = 1; i < quantidade; i++) {
-            int py = superior + i * espaco;
-            g.drawLine(esquerda, py, esquerda + larguraGrafico, py);
-        }
-
-        g.setFont(FONTE_NUMERO);
         for (int i = 0; i < quantidade; i++) {
             int y = superior + i * espaco;
-            String nome = abreviar(g, rotulos.get(i), esquerda - 140);
+            g.setFont(FONTE_NUMERO);
             g.setColor(COR_TEXTO);
-            g.drawString(nome, esquerda - g.getFontMetrics().stringWidth(nome) - 24,
-                    y + espaco / 2 + 9);
+            String nomeCompleto = rotulos.get(i);
+            int larguraNome = g.getFontMetrics().stringWidth(nomeCompleto);
+            g.drawString(nomeCompleto, esquerda - larguraNome - 30, y + espaco / 2 + 10);
 
             double valor = valores[i];
             int tamanho = (int) Math.round(Math.max(0, valor) / teto * larguraGrafico);
-            Color azul = corBarraAzul(i, quantidade);
-            Color azulClaro = new Color(Math.min(255, azul.getRed() + 42),
-                    Math.min(255, azul.getGreen() + 42), Math.min(255, azul.getBlue() + 28));
+            double proporcao = Math.max(0, Math.min(1, valor / maximo));
+            g.setColor(corBarraAzul(proporcao));
             if (tamanho > 0) {
-                g.setPaint(new GradientPaint(esquerda, y, azul, esquerda + Math.max(tamanho, 1), y, azulClaro));
-                g.fillRoundRect(esquerda, y + 14, tamanho, espaco - 28, 9, 9);
+                g.fillRoundRect(esquerda, y + 12, tamanho, espaco - 24, 10, 10);
             }
+
             g.setColor(COR_TEXTO);
-            g.setFont(FONTE_NUMERO);
+            g.setFont(fonteValores);
             String exibicao = fmt(valor, intervalo);
             if (eixo.startsWith("%")) {
                 exibicao += "%";
             }
-            g.drawString(exibicao, esquerda + tamanho + 16, y + espaco / 2 + 9);
+            g.drawString(exibicao, esquerda + tamanho + 20, y + espaco / 2 + 10);
         }
 
+        // A borda é desenhada por último, para permanecer preta e completa.
         g.setColor(COR_BORDA);
         g.setStroke(new BasicStroke(2.2f));
-        g.drawRect(esquerda, superior, larguraGrafico, quantidade * espaco);
+        g.drawRect(esquerda, superior, larguraGrafico, alturaGrafico);
         g.setColor(COR_TEXTO);
         g.setFont(FONTE_EIXO);
-        centralizar(g, eixo, esquerda + larguraGrafico / 2, alturaImagem - 54);
+        centralizar(g, eixo, esquerda + larguraGrafico / 2, alturaImagem - 65);
         g.dispose();
         ImageIO.write(imagem, "png", arq.toFile());
     }
