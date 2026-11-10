@@ -50,9 +50,9 @@ public class Main {
     static final String[] LIMITACOES = {
             "Simulação exploratória; NÃO é previsão epidemiológica.",
             "Sem matriz origem-destino: mobilidade é hipótese (contato proporcional à demanda das estações adjacentes).",
-            "Topologia inferida da ordem das estações no CSV + baldeações por nome idêntico (ver topologia_arestas.csv).",
-            "Linhas sem dados por estação usam o total da linha dividido pelo nº de estações.",
-            "Meses de anos diferentes (2024/2025/2026) foram tratados como equivalentes.",
+            "Topologia = demanda_unificada.csv + topologia_extra.csv; baldeações exclusivamente de conexoes.csv.",
+            "Linhas sem dados por estação usam o total da linha dividido pelo nº de estações listadas na topologia.",
+            "Meses de anos diferentes (2024/2025/2026) foram agrupados por mês, sem série anual homogênea.",
             "Cada estação é um grupo de N_i = w_i*popEscala pessoas simuladas (amostra), SEIR estocástico com durações exponenciais; a população de cada nó é fechada.",
             "SAR domiciliar não é aplicado ao metrô; R0 só calibra o beta da rede."};
 
@@ -63,11 +63,7 @@ public class Main {
         if (!in.hasNextLine()) { System.out.println(); System.exit(0); }
         return in.nextLine().trim();
     }
-    
-    
-    
-    
-    
+
     static int lerInt(String prompt, int def, int min, int max) {
         while (true) {
             String s = ler(prompt + " [" + def + "]: ");
@@ -97,8 +93,17 @@ public class Main {
         }
     }
     static boolean sn(String prompt, boolean def) {
-        String s = ler(prompt + (def ? " [S/n]: " : " [s/N]: ")).toLowerCase();
-        return s.isEmpty() ? def : s.startsWith("s") || s.startsWith("y");
+        String sufixo;
+        if (def) {
+            sufixo = " [S/n]: ";
+        } else {
+            sufixo = " [s/N]: ";
+        }
+        String resposta = ler(prompt + sufixo).toLowerCase(Locale.ROOT);
+        if (resposta.isEmpty()) {
+            return def;
+        }
+        return resposta.startsWith("s") || resposta.startsWith("y");
     }
 
     // ------------------------------------------------------------------ seleção linha -> estação
@@ -114,7 +119,12 @@ public class Main {
             List<Integer> ids = malha.linhas.get(keys.get(i));
     
             boolean agg = ids.size() == 1 && malha.nos.get(ids.get(0)).agregado;
-            System.out.printf("  %2d) %s (%d nó(s))%s%n", i + 1, malha.nomeLinha.get(keys.get(i)), ids.size(), agg ? " [dados agregados]" : "");
+            String observacao = "";
+            if (agg) {
+                observacao = " [dados agregados]";
+            }
+            System.out.printf("  %2d) %s (%d nó(s))%s%n", i + 1,
+                    malha.nomeLinha.get(keys.get(i)), ids.size(), observacao);
     
         }
     
@@ -176,19 +186,32 @@ public class Main {
         m.put("mes", MalhaMetroferroviaria.MESES[c.mes]);
     
         Map<String, Object> ce = new LinkedHashMap<>();
-        ce.put("nome", c.cenario.nome); ce.put("R0", c.cenario.r0); ce.put("intervalo_serial", c.cenario.intervaloSerial);
+        ce.put("nome", c.cenario.nome);
+        ce.put("R0_ou_Re", c.cenario.r0);
+        String tipoIndice = "R0";
+        if (c.cenario.nome.contains("(Re)")) {
+            tipoIndice = "Re";
+        }
+        ce.put("tipo_indice", tipoIndice);
+        ce.put("intervalo_serial", c.cenario.intervaloSerial);
         ce.put("incubacao", c.cenario.incubacao); ce.put("latencia_derivada", c.cenario.latencia(modelo.duracaoInfecciosa)); ce.put("fonte", c.cenario.fonte);
     
     
         m.put("cenario_epidemiologico", ce);
         m.put("protecao", c.nomeProtecao + " (OR=" + c.oddsRatio + ")");
-        m.put("mobilidade", c.mobilidade == 0 ? "C_ij = w_ij" : "C_ij = w_i * T_ij (caminhada aleatória ponderada)");
+        String expressaoMobilidade = "C_ij = w_ij";
+        if (c.mobilidade == 1) {
+            expressaoMobilidade = "C_ij = w_i * T_ij (caminhada aleatória ponderada)";
+        }
+        m.put("mobilidade", expressaoMobilidade);
         m.put("isolamento_sintomaticos", c.isolamento);
         m.put("populacao_escala_no_maior", c.popEscala); m.put("infectados_iniciais_por_semente", c.infectadosIniciais);
     
         MalhaMetroferroviaria.Rede r = malha.rede(c.mes, c.mobilidade);
         Map<String, Object> rd = new LinkedHashMap<>();
-        rd.put("nos", malha.nos.size()); rd.put("arestas", malha.numArestas());
+        rd.put("nos", malha.nos.size());
+        rd.put("arestas", malha.numArestas());
+        rd.put("baldeacoes_explicitas", malha.numBaldeacoes());
     
     
         rd.put("rho_C", r.rho); rd.put("beta_calibrado", malha.beta(c.cenario, c.mes, c.mobilidade, modelo));
@@ -198,9 +221,7 @@ public class Main {
     
         m.put("sementes", c.sementes.stream().map(i -> malha.nos.get(i).rotulo()).collect(java.util.stream.Collectors.toList()));
         m.put("dias", c.dias); m.put("execucoes_monte_carlo", c.execucoes); m.put("semente_aleatoria", c.rngSeed);
-    
-    
-    
+
         m.put("parametros_modelo", modelo.paraMapa());
     
         m.put("avisos_dados", malha.avisos);
@@ -230,7 +251,7 @@ public class Main {
                 r.beta, r.alcFinalMedia, n, 100 * r.alcFinalMedia / n, r.alcFinalMediana, r.alcFinalP5, r.alcFinalP95);
     
     
-        System.out.printf(Locale.US, "  taxa de ataque: média %.1f%% (P5-P95 %.1f%% – %.1f%%) | pico: %.1f pessoas infecciosas (dia médio %.1f)%n", 100 * r.ataqueMedia, 100 * r.ataqueP5, 100 * r.ataqueP95, r.picoIMedio, r.diaPicoMedio);
+        System.out.printf(Locale.US, "  taxa de ataque: média %.3f%% (P5-P95 %.3f%% – %.3f%%) | pico: %.1f pessoas infecciosas (dia médio %.1f)%n", 100 * r.ataqueMedia, 100 * r.ataqueP5, 100 * r.ataqueP95, r.picoIMedio, r.diaPicoMedio);
     }
 
     static void cabecalho() {
@@ -238,11 +259,18 @@ public class Main {
         System.out.println("\n================ SIMULADOR COVID-19 · MALHA METROFERROVIÁRIA SP ================");
     
         System.out.println(" Mês: " + MalhaMetroferroviaria.MESES[cfg.mes] + " | Cenário: " + cfg.cenario);
-        System.out.println(" Proteção: " + cfg.nomeProtecao + " (OR=" + cfg.oddsRatio + ") | Mobilidade: " + (cfg.mobilidade == 0 ? "C=w_ij" : "C=w_i·T_ij")
-    
-    
+        String mobilidade = "C=w_ij";
+        if (cfg.mobilidade == 1) {
+            mobilidade = "C=w_i*T_ij";
+        }
+        System.out.println(" Proteção: " + cfg.nomeProtecao + " (OR=" + cfg.oddsRatio
+                + ") | Mobilidade: " + mobilidade
                 + " | Isolamento sintomáticos: " + (int) (cfg.isolamento * 100) + "%");
-        System.out.println(" Sementes: " + (cfg.sementes.isEmpty() ? "(nenhuma)" : listarSementes()) + " | Dias: " + cfg.dias + " | Execuções: " + cfg.execucoes
+        String sementes = "(nenhuma)";
+        if (!cfg.sementes.isEmpty()) {
+            sementes = listarSementes();
+        }
+        System.out.println(" Sementes: " + sementes + " | Dias: " + cfg.dias + " | Execuções: " + cfg.execucoes
     
                 + " | rho(C)=" + String.format(Locale.US, "%.3f", r.rho));
     
@@ -256,8 +284,6 @@ public class Main {
         cfg.mes = escolha("Mês", 1, 12) - 1;
 
     }
-
-
 
     static void definirCenario() {
         List<ModeloEpidemiologico.Cenario> cs = modelo.cenarios;
@@ -274,7 +300,8 @@ public class Main {
 
         double ic = lerDouble("Incubação (dias)", 5.2, 1, 20);
         ModeloEpidemiologico.Cenario c = new ModeloEpidemiologico.Cenario("Personalizado R0=" + r0, r0, is, ic, "definido pelo usuário");
-        cs.add(c); cfg.cenario = c;
+        cs.add(c);
+        cfg.cenario = c;
 
     }
 
@@ -290,8 +317,6 @@ public class Main {
         cfg.oddsRatio = p.oddsRatio; cfg.nomeProtecao = p.nome;
     }
 
-
-
     static void parametrosAvancados() {
         cfg.mobilidade = lerInt("Contato entre nós: 0 = C_ij=w_ij | 1 = C_ij=w_i·T_ij (caminhada aleatória)", cfg.mobilidade, 0, 1);
 
@@ -304,20 +329,26 @@ public class Main {
         tBald = lerDouble("Percurso: minutos extras em baldeação", tBald, 0, 60);
     }
 
-
-
     // ------------------------------------------------------------------ E1/E2: percurso
     static void simularPercurso() throws Exception {
         int o = escolherEstacao("ORIGEM"), d = escolherEstacao("DESTINO");
 
         List<Integer> c1 = malha.menorNumeroEstacoes(o, d);
-        if (c1 == null) { System.out.println("Sem caminho entre os nós (grafo desconexo). Verifique conexoes.csv / topologia_arestas.csv."); return; }
+        if (c1 == null) {
+            System.out.println("Sem caminho entre as estações. Confira os arquivos de topologia.");
+            return;
+        }
 
         List<Integer> c2 = malha.menorExposicao(o, d, cfg.mes, cfg.mobilidade, tEst, tBald);
         Map<String, List<Integer>> caminhos = new LinkedHashMap<>();
 
         caminhos.put("Menos estações", c1);
-        if (!c2.equals(c1)) caminhos.put("Menor exposição", c2); else System.out.println("(o caminho de menor exposição coincide com o de menos estações)");
+        if (c2 != null) {
+            caminhos.put("Menor exposição", c2);
+            if (c2.equals(c1)) {
+                System.out.println("(BFS e Dijkstra encontraram o mesmo trajeto.)");
+            }
+        }
         double beta = malha.beta(cfg.cenario, cfg.mes, cfg.mobilidade, modelo);
 
         Path dir = MalhaMetroferroviaria.Saida.novaPasta(pastaBase, "E1E2_percurso");
@@ -337,7 +368,12 @@ public class Main {
 
 
             StringBuilder trajeto = new StringBuilder();
-            for (int v : ent.getValue()) trajeto.append(trajeto.length() > 0 ? " → " : "").append(malha.nos.get(v).estacao);
+            for (int v : ent.getValue()) {
+                if (trajeto.length() > 0) {
+                    trajeto.append(" -> ");
+                }
+                trajeto.append(malha.nos.get(v).rotulo());
+            }
 
             System.out.println("   " + trajeto);
             for (ModeloEpidemiologico.Protecao pr : modelo.protecoes) {
@@ -348,8 +384,6 @@ public class Main {
                 resumo.put(ent.getKey() + " | " + pr.nome, a.total);
 
                 double[] x = new double[a.nos.size()];
-
-
 
                 for (int i = 0; i < x.length; i++) {
 
@@ -370,10 +404,15 @@ public class Main {
                     Integer[] idx = new Integer[a.nos.size()]; for (int i = 0; i < idx.length; i++) idx[i] = i;
                     Arrays.sort(idx, (p, q) -> Double.compare(a.p[q], a.p[p]));
 
-
-
                     System.out.print("   Estações críticas (maior p local): ");
-                    for (int i = 0; i < Math.min(3, idx.length); i++) System.out.printf(Locale.US, "%s (%.2e)%s", malha.nos.get(a.nos.get(idx[i])).estacao, a.p[idx[i]], i < 2 ? "; " : "\n");
+                    for (int i = 0; i < Math.min(3, idx.length); i++) {
+                        String separador = "; ";
+                        if (i == Math.min(3, idx.length) - 1) {
+                            separador = "\n";
+                        }
+                        System.out.printf(Locale.US, "%s (%.2e)%s",
+                                malha.nos.get(a.nos.get(idx[i])).rotulo(), a.p[idx[i]], separador);
+                    }
                 }
 
             }
@@ -430,10 +469,6 @@ public class Main {
             c.add(d + "," + String.join(",", MalhaMetroferroviaria.Saida.f(r.mS[d]), MalhaMetroferroviaria.Saida.f(r.mE[d]), MalhaMetroferroviaria.Saida.f(r.mI[d]),
                     MalhaMetroferroviaria.Saida.f(r.p5I[d]), MalhaMetroferroviaria.Saida.f(r.p95I[d]), MalhaMetroferroviaria.Saida.f(r.mR[d]),
                     MalhaMetroferroviaria.Saida.f(r.mAlc[d]), MalhaMetroferroviaria.Saida.f(r.p5A[d]), MalhaMetroferroviaria.Saida.f(r.p95A[d])));
-
-
-
-
 
         MalhaMetroferroviaria.Saida.escrever(dir.resolve("curvas_temporais.csv"), c);
         List<String> e = new ArrayList<>(List.of("id,linha,estacao,semente,peso_demanda,grau,betweenness,prob_alcance,dia_chegada_medio"));
@@ -515,8 +550,6 @@ public class Main {
         System.out.println("Arquivos salvos em: " + dir);
     }
 
-
-
     static void compararMeses() throws Exception {
 
         exigirSementes();
@@ -528,7 +561,7 @@ public class Main {
 
         exigirSementes();
         List<String> rot = new ArrayList<>(); List<MalhaMetroferroviaria.Config> cs = new ArrayList<>();
-        for (ModeloEpidemiologico.Cenario s : modelo.cenarios) { MalhaMetroferroviaria.Config c = cfg.copia(); c.cenario = s; cs.add(c); rot.add(s.nome + " R0=" + s.r0); }
+        for (ModeloEpidemiologico.Cenario s : modelo.cenarios) { MalhaMetroferroviaria.Config c = cfg.copia(); c.cenario = s; cs.add(c); rot.add(s.toString()); }
 
         comparar("E5_transmissibilidade", "Sensibilidade à transmissibilidade", rot, cs);
     }
@@ -617,7 +650,8 @@ public class Main {
 
     static void resumoMalha() {
 
-        System.out.println("\nNós: " + malha.nos.size() + " | Arestas: " + malha.numArestas() + " | Linhas: " + malha.linhas.size());
+        System.out.println("\nNós: " + malha.nos.size() + " | Arestas: " + malha.numArestas()
+                + " | Baldeações: " + malha.numBaldeacoes() + " | Linhas: " + malha.linhas.size());
         for (Map.Entry<String, List<Integer>> e : malha.linhas.entrySet())
 
             System.out.printf("  %-24s %2d nó(s)%n", malha.nomeLinha.get(e.getKey()), e.getValue().size());
@@ -634,7 +668,11 @@ public class Main {
         System.setProperty("java.awt.headless", "true");
 
         System.setOut(new java.io.PrintStream(System.out, true, "UTF-8"));
-        arquivoDados = Paths.get(args.length > 0 ? args[0] : "demanda_unificada.csv");
+        String caminhoDados = "demanda_unificada.csv";
+        if (args.length > 0) {
+            caminhoDados = args[0];
+        }
+        arquivoDados = Paths.get(caminhoDados);
         while (!Files.exists(arquivoDados)) {
 
             System.out.println("CSV não encontrado: " + arquivoDados.toAbsolutePath());
@@ -646,7 +684,9 @@ public class Main {
         System.out.println("1/3 Carregando nós e arestas da malha...");
         malha = MalhaMetroferroviaria.carregar(arquivoDados, pai.resolve("topologia_extra.csv"), pai.resolve("conexoes.csv"));
 
-        System.out.println("    " + malha.nos.size() + " nós, " + malha.numArestas() + " arestas, " + malha.linhas.size() + " linhas.");
+        System.out.println("    " + malha.nos.size() + " nós, " + malha.numArestas()
+                + " arestas (" + malha.numBaldeacoes() + " baldeações), "
+                + malha.linhas.size() + " linhas.");
         System.out.println("2/3 Carregando modelo epidemiológico (" + "COVID-19" + ")...");
 
         modelo = new ModeloEpidemiologico();

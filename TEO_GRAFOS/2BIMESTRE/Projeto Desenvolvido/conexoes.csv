@@ -1,18 +1,42 @@
 linhaA;estacaoA;linhaB;estacaoB
-Linha 8;Barra Funda;Linha 3;Palmeiras-Barra Funda
-Linha 7;*;Linha 3;Palmeiras-Barra Funda
-Linha 7;*;Linha 8;Lapa
-Linha 7;*;Linha 1;Luz
-Linha 11;*;Linha 1;Luz
-Linha 7;*;Linha 11;*
-Linha 10;*;Linha 2;Tamanduateí
-Linha 10;*;Linha 3;Brás
-Linha 11;*;Linha 3;Brás
-Linha 12;*;Linha 3;Brás
-Linha 11;*;Linha 3;Tatuapé
-Linha 12;*;Linha 3;Tatuapé
-Linha 11;*;Linha 3;Corinthians-Itaquera
-Linha 10;*;Linha 11;*
-Linha 10;*;Linha 12;*
-Linha 11;*;Linha 12;*
-Linha 12;*;Linha 13;*
+Linha 1;Ana Rosa;Linha 2;Ana Rosa
+Linha 1;Paraíso;Linha 2;Paraíso
+Linha 1;Sé;Linha 3;Sé
+Linha 1;Santa Cruz;Linha 5;Santa Cruz
+Linha 1;Luz;Linha 4;Luz
+Linha 1;Luz;Linha 10;Luz
+Linha 1;Luz;Linha 11;Luz
+Linha 4;Luz;Linha 10;Luz
+Linha 4;Luz;Linha 11;Luz
+Linha 10;Luz;Linha 11;Luz
+Linha 2;Chácara Klabin;Linha 5;Chácara Klabin
+Linha 2;Consolação;Linha 4;Paulista
+Linha 2;Tamanduateí;Linha 10;Tamanduateí
+Linha 2;Vila Prudente;Linha 15;Vila Prudente
+Linha 3;República;Linha 4;República
+Linha 3;Palmeiras-Barra Funda;Linha 7;Palmeiras-Barra Funda
+Linha 3;Palmeiras-Barra Funda;Linha 8;Barra Funda
+Linha 3;Palmeiras-Barra Funda;Linha 10;Palmeiras-Barra Funda
+Linha 3;Palmeiras-Barra Funda;Linha 11;Palmeiras-Barra Funda
+Linha 7;Palmeiras-Barra Funda;Linha 8;Barra Funda
+Linha 7;Palmeiras-Barra Funda;Linha 10;Palmeiras-Barra Funda
+Linha 7;Palmeiras-Barra Funda;Linha 11;Palmeiras-Barra Funda
+Linha 8;Barra Funda;Linha 10;Palmeiras-Barra Funda
+Linha 8;Barra Funda;Linha 11;Palmeiras-Barra Funda
+Linha 10;Palmeiras-Barra Funda;Linha 11;Palmeiras-Barra Funda
+Linha 3;Brás;Linha 10;Brás
+Linha 3;Brás;Linha 11;Brás
+Linha 3;Brás;Linha 12;Brás
+Linha 10;Brás;Linha 11;Brás
+Linha 10;Brás;Linha 12;Brás
+Linha 11;Brás;Linha 12;Brás
+Linha 3;Tatuapé;Linha 11;Tatuapé
+Linha 3;Tatuapé;Linha 12;Tatuapé
+Linha 11;Tatuapé;Linha 12;Tatuapé
+Linha 3;Corinthians-Itaquera;Linha 11;Corinthians-Itaquera
+Linha 4;Pinheiros;Linha 9;Pinheiros
+Linha 5;Santo Amaro;Linha 9;Santo Amaro
+Linha 8;Osasco;Linha 9;Osasco
+Linha 8;Presidente Altino;Linha 9;Presidente Altino
+Linha 11;Calmon Viana;Linha 12;Calmon Viana
+Linha 12;Engenheiro Goulart;Linha 13;Engenheiro Goulart

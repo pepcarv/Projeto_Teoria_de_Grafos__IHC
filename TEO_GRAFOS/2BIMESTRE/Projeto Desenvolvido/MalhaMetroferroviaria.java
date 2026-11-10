@@ -81,8 +81,6 @@ public class MalhaMetroferroviaria {
         public double[][] cin; // cin[j][k] = coeficiente de contato do vizinho viz[j][k] para j
     }
 
-
-
     public static class Config {
 
 
@@ -154,8 +152,6 @@ public class MalhaMetroferroviaria {
     private final LinkedHashSet<String> ordemLinhas = new LinkedHashSet<>();
     private final Set<String> avisoNomes = new HashSet<>();
 
-
-
     // ---------------------------------------------------------------- utilidades de texto
     static String semAcento(String s) { return Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", ""); }
 
@@ -163,7 +159,10 @@ public class MalhaMetroferroviaria {
     static String chaveLinha(String s) {
         Matcher m = Pattern.compile("(\\d+)").matcher(s);
 
-        return m.find() ? "L" + Integer.parseInt(m.group(1)) : chaveTexto(s);
+        if (m.find()) {
+            return "L" + Integer.parseInt(m.group(1));
+        }
+        return chaveTexto(s);
     }
 
     public static int indiceMes(String s) {
@@ -187,7 +186,13 @@ public class MalhaMetroferroviaria {
         int pv = 0, vg = 0, tb = 0;
 
         for (char c : cab.toCharArray()) { if (c == ';') pv++; else if (c == ',') vg++; else if (c == '\t') tb++; }
-        return (pv >= vg && pv >= tb) ? ';' : (tb > vg ? '\t' : ',');
+        if (pv >= vg && pv >= tb) {
+            return ';';
+        }
+        if (tb > vg) {
+            return '\t';
+        }
+        return ',';
 
     }
 
@@ -223,12 +228,11 @@ public class MalhaMetroferroviaria {
                   e lista as estações das linhas só com TOTAL (CPTM)
     @param conex (opcional) conexoes.csv: "linhaA;estacaoA;linhaB;estacaoB" para baldeações extras
      */
-    
-    
-    
-    
-    
+
     public static MalhaMetroferroviaria carregar(Path csv, Path topo, Path conex) throws IOException {
+        if (topo == null || !Files.isRegularFile(topo)) {
+            throw new IOException("Arquivo topologia_extra.csv obrigatório para individualizar linhas CPTM: " + topo);
+        }
         MalhaMetroferroviaria g = new MalhaMetroferroviaria();
 
 
@@ -238,8 +242,6 @@ public class MalhaMetroferroviaria {
         g.montarArestas(conex);
         return g;
     }
-
-
 
     private void lerCsv(Path csv) throws IOException {
         List<String> ls = Files.readAllLines(csv, StandardCharsets.UTF_8);
@@ -289,10 +291,6 @@ public class MalhaMetroferroviaria {
 
                 arr[m] = v;
                 nomeEst.putIfAbsent(lk + "|" + ek, est);
-
-
-
-
 
             }
         }
@@ -377,8 +375,6 @@ public class MalhaMetroferroviaria {
                         No no = novoNo(lk, nome, chaveTexto(nome), false);
                         no.estimado = true;
 
-
-
                         for (int m = 0; m < 12; m++) no.demanda[m] = tot[m] / n;
                         ids.add(no.id);
                     }
@@ -410,7 +406,11 @@ public class MalhaMetroferroviaria {
             double s = 0; int c = 0;
             for (double d : n.demanda) if (!Double.isNaN(d) && d > 0) { s += d; c++; }
 
-            n.media = c > 0 ? s / c : Double.NaN;
+            if (c > 0) {
+                n.media = s / c;
+            } else {
+                n.media = Double.NaN;
+            }
             if (c > 0) { double[] a = acc.computeIfAbsent(n.linhaChave, x -> new double[2]); a[0] += n.media; a[1]++; }
         }
         int cont = 0; List<String> det = new ArrayList<>();
@@ -420,7 +420,14 @@ public class MalhaMetroferroviaria {
                 double d = n.demanda[m];
                 if (Double.isNaN(d) || d <= 0) {
                     double v = n.media;
-                    if (Double.isNaN(v)) { double[] a = acc.get(n.linhaChave); v = a != null ? a[0] / a[1] : 0; }
+                    if (Double.isNaN(v)) {
+                        double[] agregadoLinha = acc.get(n.linhaChave);
+                        if (agregadoLinha != null) {
+                            v = agregadoLinha[0] / agregadoLinha[1];
+                        } else {
+                            v = 0;
+                        }
+                    }
                     n.demanda[m] = v; cont++;
                     if (det.size() < 12) det.add(n.rotulo() + "/" + MESES[m]);
                 }
@@ -432,8 +439,6 @@ public class MalhaMetroferroviaria {
 
     }
 
-
-
     private boolean addAresta(int a, int b, boolean bald) {
 
         if (a == b) return false;
@@ -443,63 +448,109 @@ public class MalhaMetroferroviaria {
 
         if (!arestasSet.add(k)) return false;
 
-        adj.get(a).add(new int[]{b, bald ? 1 : 0});
+        int indicadorBaldeacao = 0;
+        if (bald) {
+            indicadorBaldeacao = 1;
+        }
 
-        adj.get(b).add(new int[]{a, bald ? 1 : 0});
+        adj.get(a).add(new int[]{b, indicadorBaldeacao});
+        adj.get(b).add(new int[]{a, indicadorBaldeacao});
 
         return true;
 
-
-
-
-
-
-
     }
 
+    /*
+     * Arestas de percurso: estações consecutivas da mesma linha.
+     * Baldeações: somente as 4 colunas explícitas do conexoes.csv validado.
+     * Estações homônimas NÃO devem ser unidas automaticamente: Lapa nas
+     * Linhas 7 e 8, por exemplo, não possui conexão direta no conjunto de dados.
+     */
     private void montarArestas(Path conex) throws IOException {
-        for (List<Integer> ids : linhas.values())
-            for (int i = 0; i + 1 < ids.size(); i++) addAresta(ids.get(i), ids.get(i + 1), false);
-
-        // baldeação automática: mesmo nome de estação em linhas diferentes
-
-        Map<String, List<Integer>> porNome = new LinkedHashMap<>();
-        for (No n : nos) if (!n.agregado) porNome.computeIfAbsent(n.chave, x -> new ArrayList<>()).add(n.id);
-        int auto = 0;
-        for (List<Integer> g : porNome.values())
-            for (int i = 0; i < g.size(); i++)
-                for (int j = i + 1; j < g.size(); j++)
-                    if (!nos.get(g.get(i)).linhaChave.equals(nos.get(g.get(j)).linhaChave) && addAresta(g.get(i), g.get(j), true)) auto++;
-        avisos.add("Ordem das estações = ordem do CSV (ou topologia_extra.csv); baldeações automáticas por nome idêntico: " + auto + ". Confira topologia_arestas.csv.");
-        if (conex != null && Files.exists(conex)) {
-            List<String> ls = Files.readAllLines(conex, StandardCharsets.UTF_8);
-
-            if (!ls.isEmpty()) {
-
-                char sep = detectarSeparador(ls.get(0));
-
-                for (int i = 1; i < ls.size(); i++) {
-                    List<String> f = dividir(ls.get(i).replace("\uFEFF", ""), sep);
-
-                    if (f.size() < 4) continue;
-                    int a = acharNo(chaveLinha(f.get(0)), chaveTexto(f.get(1)));
-                    int b = acharNo(chaveLinha(f.get(2)), chaveTexto(f.get(3)));
-
-                    if (a < 0 || b < 0) avisos.add("conexoes.csv linha " + (i + 1) + ": nó não encontrado.");
-                    else addAresta(a, b, true);
-
-
-                }
-            }
-
+        if (conex == null || !Files.isRegularFile(conex)) {
+            throw new IOException("Arquivo conexoes.csv obrigatório: " + conex);
         }
 
-        List<String> isolados = new ArrayList<>();
-        for (No n : nos) if (adj.get(n.id).isEmpty()) isolados.add(n.rotulo());
+        for (List<Integer> ids : linhas.values()) {
+            for (int i = 0; i + 1 < ids.size(); i++) {
+                int origem = ids.get(i);
+                int destino = ids.get(i + 1);
+                addAresta(origem, destino, false);
+            }
+        }
 
-        if (!isolados.isEmpty()) avisos.add("Nós isolados (sem nenhuma aresta): " + isolados);
+        List<String> linhasCsv = Files.readAllLines(conex, StandardCharsets.UTF_8);
+        if (linhasCsv.size() < 2) {
+            throw new IOException("conexoes.csv não contém baldeações.");
+        }
+
+        String cabecalho = linhasCsv.get(0).replace("\uFEFF", "");
+        char separador = detectarSeparador(cabecalho);
+        List<String> colunas = dividir(cabecalho, separador);
+        String[] esperadas = {"linhaa", "estacaoa", "linhab", "estacaob"};
+
+        if (colunas.size() != 4) {
+            throw new IOException("Cabeçalho inválido em conexoes.csv (esperadas quatro colunas).");
+        }
+
+        for (int i = 0; i < esperadas.length; i++) {
+            if (!chaveTexto(colunas.get(i)).equals(esperadas[i])) {
+                throw new IOException("Coluna inválida em conexoes.csv: " + colunas.get(i));
+            }
+        }
+
+        int baldeacoes = 0;
+        for (int linha = 1; linha < linhasCsv.size(); linha++) {
+            String texto = linhasCsv.get(linha).replace("\uFEFF", "").trim();
+            if (texto.isEmpty()) {
+                continue;
+            }
+
+            List<String> campos = dividir(texto, separador);
+            if (campos.size() != 4) {
+                throw new IOException("conexoes.csv, linha " + (linha + 1) + ": quatro campos obrigatórios.");
+            }
+
+            int origem = acharNo(chaveLinha(campos.get(0)), chaveTexto(campos.get(1)));
+            int destino = acharNo(chaveLinha(campos.get(2)), chaveTexto(campos.get(3)));
+
+            if (origem < 0 || destino < 0) {
+                throw new IOException("conexoes.csv, linha " + (linha + 1)
+                        + ": estação não encontrada: " + texto);
+            }
+
+            if (!addAresta(origem, destino, true)) {
+                throw new IOException("conexoes.csv, linha " + (linha + 1)
+                        + ": conexão repetida ou inválida: " + texto);
+            }
+            baldeacoes++;
+        }
+
+        avisos.add("Baldeações explícitas carregadas: " + baldeacoes
+                + ". Não foram inferidas conexões pelo nome da estação.");
+
+        List<String> isolados = new ArrayList<>();
+        for (No no : nos) {
+            if (adj.get(no.id).isEmpty()) {
+                isolados.add(no.rotulo());
+            }
+        }
+        if (!isolados.isEmpty()) {
+            avisos.add("Nós isolados: " + isolados);
+        }
     }
 
+    public int numBaldeacoes() {
+        int quantidade = 0;
+        for (int i = 0; i < adj.size(); i++) {
+            for (int[] aresta : adj.get(i)) {
+                if (aresta[0] > i && aresta[1] == 1) {
+                    quantidade++;
+                }
+            }
+        }
+        return quantidade;
+    }
 
 
     private int acharNo(String lk, String ek) {
@@ -513,8 +564,6 @@ public class MalhaMetroferroviaria {
         return -1;
     }
 
-
-
     public int numArestas() { int s = 0; for (List<int[]> l : adj) s += l.size(); return s / 2; }
     public boolean ehBaldeacao(int a, int b) { for (int[] e : adj.get(a)) if (e[0] == b) return e[1] == 1; return false; }
 
@@ -523,15 +572,19 @@ public class MalhaMetroferroviaria {
         return cacheRede.computeIfAbsent(mes * 2 + mobilidade, chv -> {
             int n = nos.size();
 
-
-
-
             Rede r = new Rede();
             r.w = new double[n]; r.viz = new int[n][]; r.c = new double[n][];
             double max = 0;
             for (No no : nos) max = Math.max(max, no.demanda[mes]);
 
-            for (No no : nos) r.w[no.id] = max > 0 ? no.demanda[mes] / max : 0;   // w_i,m = D_i,m / max(D_m)
+            // Peso da estação no mês: w_i,m = D_i,m / max_j(D_j,m).
+        for (No no : nos) {
+            if (max > 0) {
+                r.w[no.id] = no.demanda[mes] / max;
+            } else {
+                r.w[no.id] = 0;
+            }
+        }
             for (int i = 0; i < n; i++) {
                 int d = adj.get(i).size();
 
@@ -545,10 +598,16 @@ public class MalhaMetroferroviaria {
                     int j = r.viz[i][k];
                     double wij = (r.w[i] + r.w[j]) / 2;                           // w_ij,m = média dos pesos
 
-                    r.c[i][k] = mobilidade == 0 ? wij : r.w[i] * (soma > 0 ? wij / soma : 0); // T_ij (caminhada aleatória)
+                    // Mobilidade 0: C_ij = (w_i + w_j) / 2.
+                    // Mobilidade 1: T_ij = w_ij / soma_k(w_ik); C_ij = w_i * T_ij.
+                    if (mobilidade == 0) {
+                        r.c[i][k] = wij;
+                    } else if (soma > 0) {
+                        r.c[i][k] = r.w[i] * wij / soma;
+                    } else {
+                        r.c[i][k] = 0;
+                    }
                 }
-
-
 
             }
 
@@ -575,9 +634,6 @@ public class MalhaMetroferroviaria {
         int n = r.w.length;
         double[] x = new double[n], y = new double[n];
 
-
-
-
         Arrays.fill(x, 1.0 / Math.sqrt(n));
         double lam = 0;
         for (int it = 0; it < 5000; it++) {
@@ -587,11 +643,6 @@ public class MalhaMetroferroviaria {
                 for (int k = 0; k < r.viz[i].length; k++) s += r.c[i][k] * x[r.viz[i][k]];
                 y[i] = s; norm += s * s;
             }
-
-
-
-
-
 
             norm = Math.sqrt(norm);
             for (int i = 0; i < n; i++) x[i] = y[i] / norm;
@@ -603,131 +654,107 @@ public class MalhaMetroferroviaria {
 
     /* beta tal que rho(K) = beta * rho(C) * T_inf = R0 do cenário. */
     public double beta(ModeloEpidemiologico.Cenario c, int mes, int mob, ModeloEpidemiologico modelo) {
-        return c.r0 / (modelo.duracaoInfecciosa * rede(mes, mob).rho);
+        // Transmissibilidade (beta) = R0 / (duracao_infecciosa * raio_espectral(C)).
+        double duracao = modelo.duracaoInfecciosa;
+        double raioEspectral = rede(mes, mob).rho;
+        double beta = c.r0 / (duracao * raioEspectral);
+        return beta;
 
 
     }
-
-
 
     // ---------------------------------------------------------------- MODO 1: percurso
 
-    public List<Integer> menorNumeroEstacoes(int o, int d) {
-        int n = nos.size(); int[] prev = new int[n]; Arrays.fill(prev, -2);
+    /*
+     * BFS: menor número de arestas entre origem e destino.
+     * Arestas de baldeação também contam como uma aresta de percurso.
+     */
+    public List<Integer> menorNumeroEstacoes(int origem, int destino) {
+        int quantidade = nos.size();
+        int[] anterior = new int[quantidade];
+        Arrays.fill(anterior, -2);
 
+        Deque<Integer> fila = new ArrayDeque<>();
+        anterior[origem] = -1;
+        fila.add(origem);
 
-        Deque<Integer> q = new ArrayDeque<>(); q.add(o); prev[o] = -1;
-        while (!q.isEmpty()) {
-
-
-            int v = q.poll();
-
-            if (v == d) break;
-
-            for (int[] e : adj.get(v)) if (prev[e[0]] == -2) { prev[e[0]] = v; q.add(e[0]); }
-
-        }
-        return reconstruir(prev, o, d);
-    }
-
-    /* Dijkstra com custo de entrada em j = w_j * tempo (tempo = estação + baldeação): minimiza o lambda acumulado. 
-    Essa execução foi baseada no algorimto que vimos em sala de aula
-    
-    */
-
-    public List<Integer> menorExposicao(int o, int d, int mes, int mob, double tEst, double tBald) {
-
-        Rede r = rede(mes, mob);
-        int n = nos.size();
-
-        // d_1i: menor custo conhecido da origem o até i
-        double[] dist = new double[n];
-        Arrays.fill(dist, Double.POSITIVE_INFINITY);
-
-        // rot(i): predecessor de i na rota
-        int[] prev = new int[n];
-        Arrays.fill(prev, -2);
-
-        // A: conjunto de vértices ainda abertos
-        Set<Integer> A = new HashSet<>();
-
-        // F: conjunto de vértices fechados
-        Set<Integer> F = new HashSet<>();
-
-        // Inicialização:
-        // d_oo = 0
-        dist[o] = 0.0;
-        prev[o] = -1;
-
-        for (int i = 0; i < n; i++) {
-            A.add(i);
-        }
-
-        int k = 0;
-
-        while (!A.isEmpty()) {
-
-            // k++
-            k++;
-
-            
-            // r <- vértice de A com menor distância até a origem
-            int rAtual = -1;
-            double menorDistancia = Double.POSITIVE_INFINITY;
-
-            for (int i : A) {
-                if (dist[i] < menorDistancia) {
-                    menorDistancia = dist[i];
-                    rAtual = i;
-                }
-            }
-
-            // Não existem mais vértices alcançáveis
-            if (rAtual == -1 || Double.isInfinite(menorDistancia)) {
+        while (!fila.isEmpty()) {
+            int atual = fila.removeFirst();
+            if (atual == destino) {
                 break;
             }
 
-            
-            // F <- F U {r}
-            // A <- A - {r}
-            F.add(rAtual);
-            A.remove(rAtual);
-
-            
-            // S <- A ∩ N+(r)
-            for (int[] e : adj.get(rAtual)) {
-
-                int i = e[0];
-
-                // Só consideramos sucessores que ainda estão abertos.
-                if (!A.contains(i)) {
-                    continue;
-                }
-
-                // v_ri:
-                // custo de ir de rAtual para i
-                //
-                // Se e[1] == 1, existe baldeação e acrescentamos
-                // tBald ao tempo considerado na estação i.
-                double custoAresta =
-                        r.w[i] * (tEst + (e[1] == 1 ? tBald : 0.0));
-
-                // p <- min(d^(k-1)_1i, d_1r + v_ri)
-                double novaDistancia =
-                        dist[rAtual] + custoAresta;
-
-                if (novaDistancia < dist[i]) {
-                    // d^k_1i <- p
-                    dist[i] = novaDistancia;
-                    // rot(i) <- r
-                    prev[i] = rAtual;
+            for (int[] aresta : adj.get(atual)) {
+                int vizinho = aresta[0];
+                if (anterior[vizinho] == -2) {
+                    anterior[vizinho] = atual;
+                    fila.addLast(vizinho);
                 }
             }
         }
 
+        return reconstruir(anterior, origem, destino);
+    }
 
+    /*
+     * Dijkstra: minimiza a exposição ponderada do percurso.
+     * Custo ao entrar no nó j = w_j * (t_est + t_bald se houver baldeação).
+     * Não usa uma matriz origem-destino nem estima tempo real de viagem.
+     */
+    public List<Integer> menorExposicao(int origem, int destino, int mes, int mobilidade,
+                                       double tEst, double tBald) {
+        Rede rede = rede(mes, mobilidade);
+        int quantidade = nos.size();
 
-        return reconstruir(prev, o, d);
+        double[] distancia = new double[quantidade];
+        int[] anterior = new int[quantidade];
+        boolean[] visitado = new boolean[quantidade];
+        Arrays.fill(distancia, Double.POSITIVE_INFINITY);
+        Arrays.fill(anterior, -2);
+
+        distancia[origem] = 0;
+        anterior[origem] = -1;
+
+        for (int passo = 0; passo < quantidade; passo++) {
+            int atual = -1;
+            double menor = Double.POSITIVE_INFINITY;
+
+            // Em empate, escolhe o menor ID para manter resultados reproduzíveis.
+            for (int id = 0; id < quantidade; id++) {
+                if (!visitado[id] && distancia[id] < menor) {
+                    atual = id;
+                    menor = distancia[id];
+                }
+            }
+
+            if (atual == -1) {
+                break;
+            }
+            visitado[atual] = true;
+
+            for (int[] aresta : adj.get(atual)) {
+                int vizinho = aresta[0];
+                if (visitado[vizinho]) {
+                    continue;
+                }
+
+                double tempo = tEst;
+                if (aresta[1] == 1) {
+                    tempo += tBald;
+                }
+
+                // Exposição ponderada: custo(atual, vizinho) = w_vizinho * tempo.
+                double custo = rede.w[vizinho] * tempo;
+                double alternativa = distancia[atual] + custo;
+
+                if (alternativa < distancia[vizinho]) {
+                    distancia[vizinho] = alternativa;
+                    anterior[vizinho] = atual;
+                }
+            }
+        }
+
+        return reconstruir(anterior, origem, destino);
     }
 
     private List<Integer> reconstruir(int[] prev, int o, int d) {
@@ -757,31 +784,34 @@ public class MalhaMetroferroviaria {
 
         double surv = 1;
 
-
-
-
         for (int i = 0; i < n; i++) {
 
             int v = caminho.get(i);
             a.baldeacao[i] = i > 0 && ehBaldeacao(caminho.get(i - 1), v);
-            double t = tEst + (a.baldeacao[i] ? tBald : 0);
+            double t = tEst;
+            if (a.baldeacao[i]) {
+                t += tBald;
+            }
 
 
             a.peso[i] = r.w[v];
 
 
+            // Taxa de contágio (lambda_i) = beta * peso_i * k * tempo_em_dias.
             a.lambda[i] = beta * r.w[v] * k * (t / 1440.0);
 
-
-
-
-
+            // Probabilidade local (p_i) = 1 - exp(-lambda_i), com proteção por OR.
             double p = 1 - Math.exp(-a.lambda[i]);
             a.p[i] = ModeloEpidemiologico.aplicarOR(p, or);
             surv *= (1 - a.p[i]);
+            // Probabilidade acumulada = 1 - produto(1 - p_i).
             a.acum[i] = 1 - surv;
         }
-        a.total = n > 0 ? a.acum[n - 1] : 0;
+        if (n > 0) {
+            a.total = a.acum[n - 1];
+        } else {
+            a.total = 0;
+        }
         return a;
     }
 
@@ -800,32 +830,30 @@ public class MalhaMetroferroviaria {
         int x = (int) Math.round(mean + Math.sqrt(mean * (1 - p)) * rng.nextGaussian());
         return Math.max(0, Math.min(n, x));
 
-
-
-
     }
 
     /*
      * SEIR estocástico por grupos: cada estação i tem N_i = w_i*popEscala pessoas (S,E,I,R).
-     * Pressão sobre j: Lambda_j = beta * sum_i c_ij * m * I_i / N_j; prob. por suscetível p_j = 1-exp(-Lambda_j)
+     * Pressão sobre j: Lambda_j = beta * m * soma_i(C_ij * I_i); probabilidade por suscetível p_j = 1 - exp(-Lambda_j / N_j)
      * (equivale a 1 - prod(1 - p_ij)); proteção por odds; novos expostos ~ Binomial(S_j, p_j).
      * E->I com taxa 1/latência; I->R com taxa 1/T_inf. Como a matriz de próxima geração é beta*T_inf*C,
      * a calibração rho(K)=R0 permanece válida. 'm' reduz o contato dos sintomáticos (isolamento).
      */
 
-
-
-
-
-
     public Resultado simular(Config cfg, ModeloEpidemiologico modelo) {
         int n = nos.size(), D = cfg.dias, R = cfg.execucoes;
         Rede rd = rede(cfg.mes, cfg.mobilidade);
         double tInf = modelo.duracaoInfecciosa;
+        // Transmissibilidade (beta) = R0 / (6,3 dias * rho(C)).
         double beta = cfg.cenario.r0 / (tInf * rd.rho);
         double lat = cfg.cenario.latencia(tInf);
-        double pEI = 1 - Math.exp(-1.0 / lat), pIR = 1 - Math.exp(-1.0 / tInf);
-        double posSint = Math.max(0, 1 - Math.max(0, cfg.cenario.incubacao - lat) / tInf); // fração do período infeccioso após sintomas
+        // Taxas de transição diárias: p(E -> I) = 1 - exp(-1/latencia).
+        // Taxas de transição diárias: p(I -> R) = 1 - exp(-1/duracao_infecciosa).
+        double pEI = 1 - Math.exp(-1.0 / lat);
+        double pIR = 1 - Math.exp(-1.0 / tInf);
+        // Fração do período infeccioso após início dos sintomas.
+        double posSint = Math.max(0, 1 - Math.max(0, cfg.cenario.incubacao - lat) / tInf);
+        // Fator de contato: m = 1 - (1 - frac_assintomatica) * posSint * isolamento.
         double m = 1 - (1 - modelo.fracAssintomatica) * posSint * cfg.isolamento;
 
         int[] N = new int[n]; long popTot = 0;
@@ -847,14 +875,10 @@ public class MalhaMetroferroviaria {
 
             int[] s = N.clone(), e = new int[n], in = new int[n], rr = new int[n], cheg = new int[n];
 
-
-
             Arrays.fill(cheg, -1);
             for (int sd : cfg.sementes) { in[sd] = cfg.infectadosIniciais; s[sd] = N[sd] - in[sd]; cheg[sd] = 0; }
 
             registrar(s, e, in, rr, cheg, 0, S[run], E[run], I[run], Rm[run], A[run]);
-
-
 
             for (int d = 1; d <= D; d++) {
                 int[] ne = new int[n], ni = new int[n], nr = new int[n];
@@ -869,7 +893,14 @@ public class MalhaMetroferroviaria {
                             if (in[i] > 0) pres += beta * rd.cin[j][k] * m * in[i];
 
                         }
-                        if (pres > 0) ne[j] = binom(s[j], ModeloEpidemiologico.aplicarOR(1 - Math.exp(-pres / N[j]), cfg.oddsRatio), rng);
+                        if (pres > 0) {
+                            // Pressão(j) = beta * m * soma_i(C_ij * I_i).
+                            // Taxa por suscetível = Pressão(j) / N_j.
+                            // Probabilidade de infecção = 1 - exp(-Pressão(j) / N_j).
+                            double probabilidade = 1 - Math.exp(-pres / N[j]);
+                            probabilidade = ModeloEpidemiologico.aplicarOR(probabilidade, cfg.oddsRatio);
+                            ne[j] = binom(s[j], probabilidade, rng);
+                        }
 
                     }
                     ni[j] = binom(e[j], pEI, rng);
@@ -878,7 +909,12 @@ public class MalhaMetroferroviaria {
                 }
 
                 for (int j = 0; j < n; j++) {
-                    s[j] -= ne[j]; e[j] += ne[j] - ni[j]; in[j] += ni[j] - nr[j]; rr[j] += nr[j];
+                    // Modelo SEIR: S' = S - novos_E; E' = E + novos_E - novos_I;
+                    // I' = I + novos_I - novos_R; R' = R + novos_R.
+                    s[j] -= ne[j];
+                    e[j] += ne[j] - ni[j];
+                    in[j] += ni[j] - nr[j];
+                    rr[j] += nr[j];
                     if (ne[j] > 0 && cheg[j] < 0) cheg[j] = d;
 
                 }
@@ -888,7 +924,10 @@ public class MalhaMetroferroviaria {
             double pk = -1; int dp = 0;
 
             for (int d = 0; d <= D; d++) if (I[run][d] > pk) { pk = I[run][d]; dp = d; }
-            pico[run] = pk; diaPico[run] = dp; ataque[run] = 1.0 - S[run][D] / popTot;
+            // Taxa de ataque = 1 - suscetíveis_finais / população_simulada_total.
+            pico[run] = pk;
+            diaPico[run] = dp;
+            ataque[run] = 1.0 - S[run][D] / popTot;
 
             for (int j = 0; j < n; j++) if (cheg[j] >= 0) { cont[j]++; somaCh[j] += cheg[j]; }
 
@@ -913,7 +952,11 @@ public class MalhaMetroferroviaria {
         r.alcFinalMedia = media(fin); r.alcFinalMediana = pct(fin, 0.5);
         r.alcFinalP5 = pct(fin, 0.05); r.alcFinalP95 = pct(fin, 0.95);
         double v = 0; for (double x : fin) v += (x - r.alcFinalMedia) * (x - r.alcFinalMedia);
-        r.alcFinalDp = R > 1 ? Math.sqrt(v / (R - 1)) : 0;
+        if (R > 1) {
+            r.alcFinalDp = Math.sqrt(v / (R - 1));
+        } else {
+            r.alcFinalDp = 0;
+        }
 
         r.picoIMedio = media(pico); r.diaPicoMedio = media(diaPico);
 
@@ -923,7 +966,11 @@ public class MalhaMetroferroviaria {
 
         for (int j = 0; j < n; j++) {
             r.probAlcance[j] = cont[j] / (double) R;
-            r.chegadaMedia[j] = cont[j] > 0 ? somaCh[j] / cont[j] : Double.NaN;
+            if (cont[j] > 0) {
+                r.chegadaMedia[j] = somaCh[j] / cont[j];
+            } else {
+                r.chegadaMedia[j] = Double.NaN;
+            }
 
         }
 
@@ -939,7 +986,16 @@ public class MalhaMetroferroviaria {
         S[d] = a; E[d] = b; I[d] = c; R[d] = f; A[d] = g;
     }
     static double[] coluna(double[][] m, int d) { double[] c = new double[m.length]; for (int i = 0; i < m.length; i++) c[i] = m[i][d]; return c; }
-    static double media(double[] v) { double s = 0; for (double x : v) s += x; return v.length == 0 ? 0 : s / v.length; }
+    static double media(double[] valores) {
+        if (valores.length == 0) {
+            return 0;
+        }
+        double soma = 0;
+        for (double valor : valores) {
+            soma += valor;
+        }
+        return soma / valores.length;
+    }
 
     static double pct(double[] v, double p) {
         double[] a = v.clone(); Arrays.sort(a);
@@ -960,8 +1016,6 @@ public class MalhaMetroferroviaria {
         return imp;
     }
 
-
-
     // ---------------------------------------------------------------- centralidade
     public double[] grau() { double[] g = new double[nos.size()]; for (int i = 0; i < g.length; i++) g[i] = adj.get(i).size(); return g; }
 
@@ -977,8 +1031,6 @@ public class MalhaMetroferroviaria {
             for (int i = 0; i < n; i++) P.add(new ArrayList<>());
 
             double[] sigma = new double[n]; int[] dist = new int[n]; Arrays.fill(dist, -1);
-
-
 
             sigma[s] = 1; dist[s] = 0;
             Queue<Integer> q = new ArrayDeque<>(); q.add(s);
@@ -1039,9 +1091,16 @@ public class MalhaMetroferroviaria {
             for (int[] e : adj.get(i))
                 if (e[0] > i) b.add(i + "," + Saida.q(nos.get(i).linha) + "," + Saida.q(nos.get(i).estacao) + "," + e[0] + ","
 
-                        + Saida.q(nos.get(e[0]).linha) + "," + Saida.q(nos.get(e[0]).estacao) + "," + (e[1] == 1 ? "baldeacao" : "mesma_linha"));
+                        + Saida.q(nos.get(e[0]).linha) + "," + Saida.q(nos.get(e[0]).estacao) + "," + tipoAresta(e[1]));
 
         Saida.escrever(dir.resolve("topologia_arestas.csv"), b);
+    }
+
+    private static String tipoAresta(int indicador) {
+        if (indicador == 1) {
+            return "baldeacao";
+        }
+        return "mesma_linha";
     }
 
     // ================================================================ SAÍDA (arquivos)
@@ -1060,7 +1119,12 @@ public class MalhaMetroferroviaria {
             Files.write(arq, linhas, StandardCharsets.UTF_8);
         }
         public static String q(String s) { return "\"" + s.replace("\"", "\"\"") + "\""; }
-        public static String f(double v) { return Double.isNaN(v) ? "" : String.format(Locale.US, "%.6g", v); }
+        public static String f(double v) {
+            if (Double.isNaN(v)) {
+                return "";
+            }
+            return String.format(Locale.US, "%.6g", v);
+        }
         public static void json(Path arq, Object o) throws IOException {
             StringBuilder sb = new StringBuilder(); js(sb, o, 0);
             Files.write(arq, sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -1079,8 +1143,6 @@ public class MalhaMetroferroviaria {
 
                 Map<?, ?> m = (Map<?, ?>) o;
 
-
-
                 if (m.isEmpty()) { sb.append("{}"); return; }
                 sb.append("{\n"); int i = 0;
                 for (Map.Entry<?, ?> e : m.entrySet()) {
@@ -1093,15 +1155,20 @@ public class MalhaMetroferroviaria {
             } else if (o instanceof Collection) {
                 Collection<?> c = (Collection<?>) o;
 
-
-
                 if (c.isEmpty()) { sb.append("[]"); return; }
                 sb.append("[\n"); int i = 0;
                 for (Object x : c) { sb.append(pad); js(sb, x, ind + 1); if (++i < c.size()) sb.append(','); sb.append('\n'); }
                 sb.append(end).append(']');
             } else if (o instanceof double[]) { List<Double> l = new ArrayList<>(); for (double d : (double[]) o) l.add(d); js(sb, l, ind); }
             else if (o instanceof int[]) { List<Integer> l = new ArrayList<>(); for (int d : (int[]) o) l.add(d); js(sb, l, ind); }
-            else if (o instanceof Double) { double d = (Double) o; sb.append(Double.isNaN(d) || Double.isInfinite(d) ? "null" : o.toString()); }
+            else if (o instanceof Double) {
+                double valor = (Double) o;
+                if (Double.isNaN(valor) || Double.isInfinite(valor)) {
+                    sb.append("null");
+                } else {
+                    sb.append(o.toString());
+                }
+            }
             else if (o instanceof Number || o instanceof Boolean) sb.append(o);
             else sb.append('"').append(esc(o.toString())).append('"');
         }
@@ -1117,13 +1184,26 @@ public class MalhaMetroferroviaria {
 
         if (range <= 0) return 1;
         double raw = range / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
-        return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+        double multiplo;
+        if (f < 1.5) {
+            multiplo = 1;
+        } else if (f < 3) {
+            multiplo = 2;
+        } else if (f < 7) {
+            multiplo = 5;
+        } else {
+            multiplo = 10;
+        }
+        return multiplo * mag;
     }
     private static String fmt(double v, double step) {
         if (v == 0) return "0";
         if (step < 1e-3 || Math.abs(v) >= 1e6) return String.format(Locale.US, "%.1e", v);
-        int dec = step >= 1 ? 0 : (int) Math.ceil(-Math.log10(step));
-        return String.format(Locale.US, "%." + dec + "f", v);
+        int decimais = 0;
+        if (step < 1) {
+            decimais = (int) Math.ceil(-Math.log10(step));
+        }
+        return String.format(Locale.US, "%." + decimais + "f", v);
 
     }
     private static Graphics2D nova(BufferedImage img) {
@@ -1143,7 +1223,11 @@ public class MalhaMetroferroviaria {
         double xmin = Double.MAX_VALUE, xmax = -Double.MAX_VALUE, ymin = 0, ymax = -Double.MAX_VALUE;
         for (Serie s : series) for (int i = 0; i < s.x.length; i++) {
             xmin = Math.min(xmin, s.x[i]); xmax = Math.max(xmax, s.x[i]);
-            ymax = Math.max(ymax, s.hi != null ? Math.max(s.hi[i], s.y[i]) : s.y[i]);
+            double teto = s.y[i];
+            if (s.hi != null) {
+                teto = Math.max(s.hi[i], s.y[i]);
+            }
+            ymax = Math.max(ymax, teto);
         }
         if (ymax <= ymin) ymax = ymin + 1;
         if (xmax <= xmin) xmax = xmin + 1;
@@ -1193,7 +1277,10 @@ public class MalhaMetroferroviaria {
         for (Serie s : series) {
             g.setColor(s.cor); g.setStroke(new BasicStroke(3f)); g.drawLine(ml + pw + 20, ly, ml + pw + 45, ly);
             g.setStroke(new BasicStroke(1f)); g.setColor(Color.BLACK);
-            String nome = s.nome.length() > 38 ? s.nome.substring(0, 37) + "…" : s.nome;
+            String nome = s.nome;
+            if (nome.length() > 38) {
+                nome = nome.substring(0, 37) + "…";
+            }
             g.drawString(nome, ml + pw + 52, ly + 4); ly += 20;
         }
         g.setFont(new Font("SansSerif", Font.BOLD, 16)); g.setColor(Color.BLACK);
@@ -1214,19 +1301,17 @@ public class MalhaMetroferroviaria {
         g.setFont(new Font("SansSerif", Font.PLAIN, 12));
         for (int i = 0; i < n; i++) {
 
-
-
-
             int y = mt + i * bh, w = (int) ((W - ml - mr) * val[i] / max);
             g.setColor(PALETA[0]); g.fillRect(ml, y, Math.max(w, 1), bh - 6);
             g.setColor(Color.BLACK);
-            String r = rot.get(i).length() > 44 ? rot.get(i).substring(0, 43) + "…" : rot.get(i);
+            String r = rot.get(i);
+            if (r.length() > 44) {
+                r = r.substring(0, 43) + "…";
+            }
             g.drawString(r, ml - 8 - g.getFontMetrics().stringWidth(r), y + 15);
             g.drawString(String.format(Locale.US, "%.3g", val[i]), ml + w + 6, y + 15);
         }
         g.drawString(eixo, ml, H - 15);
-
-
 
         g.dispose();
         ImageIO.write(img, "png", arq.toFile());
@@ -1254,9 +1339,6 @@ public class MalhaMetroferroviaria {
                 dx[i] -= ex / d * f; dy[i] -= ey / d * f; dx[j] += ex / d * f; dy[j] += ey / d * f;
             }
 
-
-
-
             for (int i = 0; i < n; i++) {
                 dx[i] -= (x[i] - 0.5) * 0.8; dy[i] -= (y[i] - 0.5) * 0.8;
                 double len = Math.max(Math.hypot(dx[i], dy[i]), 1e-9), m = Math.min(len, t);
@@ -1276,8 +1358,21 @@ public class MalhaMetroferroviaria {
     private static Color gradiente(double t) {
         t = Math.max(0, Math.min(1, t));
         int[] a = {49, 130, 189}, b = {254, 224, 144}, c = {215, 48, 39};
-        int[] u = t < 0.5 ? a : b, v = t < 0.5 ? b : c; double s = t < 0.5 ? t * 2 : (t - 0.5) * 2;
-        return new Color((int) (u[0] + (v[0] - u[0]) * s), (int) (u[1] + (v[1] - u[1]) * s), (int) (u[2] + (v[2] - u[2]) * s));
+        int[] u;
+        int[] v;
+        double proporcao;
+        if (t < 0.5) {
+            u = a;
+            v = b;
+            proporcao = t * 2;
+        } else {
+            u = b;
+            v = c;
+            proporcao = (t - 0.5) * 2;
+        }
+        return new Color((int) (u[0] + (v[0] - u[0]) * proporcao),
+                (int) (u[1] + (v[1] - u[1]) * proporcao),
+                (int) (u[2] + (v[2] - u[2]) * proporcao));
     }
 
     /* Mapa da rede (layout força-dirigida: sem coordenadas geográficas). Cor = valor/vmax; tamanho = demanda do mês. */
@@ -1292,8 +1387,14 @@ public class MalhaMetroferroviaria {
         Graphics2D g = nova(img);
         for (int i = 0; i < nos.size(); i++) for (int[] e : adj.get(i)) {
             int j = e[0]; if (j < i) continue;
-            g.setColor(e[1] == 1 ? new Color(255, 140, 0, 170) : new Color(150, 150, 150, 160));
-            g.setStroke(e[1] == 1 ? new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[]{5f, 4f}, 0f) : new BasicStroke(1.3f));
+            if (e[1] == 1) {
+                g.setColor(new Color(255, 140, 0, 170));
+                g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND,
+                        BasicStroke.JOIN_ROUND, 1f, new float[]{5f, 4f}, 0f));
+            } else {
+                g.setColor(new Color(150, 150, 150, 160));
+                g.setStroke(new BasicStroke(1.3f));
+            }
             g.drawLine((int) (m + p[i][0] * (W - 2 * m)), (int) (m + p[i][1] * (H - 2 * m)), (int) (m + p[j][0] * (W - 2 * m)), (int) (m + p[j][1] * (H - 2 * m)));
 
         }
@@ -1308,9 +1409,21 @@ public class MalhaMetroferroviaria {
         for (int i = 0; i < nos.size(); i++) {
             int cx = (int) (m + p[i][0] * (W - 2 * m)), cy = (int) (m + p[i][1] * (H - 2 * m));
             int rad = (int) (4 + 9 * Math.sqrt(r.w[i]));
-            g.setColor(gradiente(vmax > 0 ? valor[i] / vmax : 0)); g.fillOval(cx - rad, cy - rad, 2 * rad, 2 * rad);
-            boolean sem = destaque != null && destaque.contains(i);
-            g.setColor(sem ? Color.BLACK : new Color(60, 60, 60)); g.setStroke(new BasicStroke(sem ? 3f : 1f));
+            double corValor = 0;
+            if (vmax > 0) {
+                corValor = valor[i] / vmax;
+            }
+            g.setColor(gradiente(corValor));
+            g.fillOval(cx - rad, cy - rad, 2 * rad, 2 * rad);
+
+            boolean selecionado = destaque != null && destaque.contains(i);
+            if (selecionado) {
+                g.setColor(Color.BLACK);
+                g.setStroke(new BasicStroke(3f));
+            } else {
+                g.setColor(new Color(60, 60, 60));
+                g.setStroke(new BasicStroke(1f));
+            }
 
             g.drawOval(cx - rad, cy - rad, 2 * rad, 2 * rad);
             if (rotular.contains(i)) { g.setColor(Color.BLACK); g.drawString(nos.get(i).estacao, cx + rad + 3, cy - 3); }
