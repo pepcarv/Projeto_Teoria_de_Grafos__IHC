@@ -52,8 +52,12 @@ public class ModeloEpidemiologico {
         }
 
         @Override public String toString() {
-            return String.format(Locale.US, "%s (R0=%.2f, int. serial=%.1f d, incubação=%.2f d)",
-                    nome, r0, intervaloSerial, incubacao);
+            String indice = "R0";
+            if (nome.contains("(Re)")) {
+                indice = "Re";
+            }
+            return String.format(Locale.US, "%s (%s=%.2f, int. serial=%.1f d, incubação=%.2f d)",
+                    nome, indice, r0, intervaloSerial, incubacao);
         }
     }
 
@@ -87,7 +91,8 @@ public class ModeloEpidemiologico {
         protecoes.add(new Protecao("Proteção elevada", 0.15, "Chu et al. 2020 (aOR 0,15; IC 0,07-0,34)"));
     }
 
-    /* p -> p' aplicando odds ratio: odds' = odds*OR; p' = odds'/(1+odds'). */
+    /* Probabilidade protegida: odds = p/(1-p); odds_protegidas = odds*OR;
+       p_protegida = odds_protegidas/(1+odds_protegidas). */
     public static double aplicarOR(double p, double or) {
        
        
@@ -99,10 +104,8 @@ public class ModeloEpidemiologico {
 
     public Map<String, Object> paraMapa() {
         Map<String, Object> m = new LinkedHashMap<>();
-       
-       
-       
-       //rever!!!
+
+       // Parâmetros constantes usados para descrever a simulação.
         m.put("doenca", doenca);
         m.put("duracao_infecciosa_dias", duracaoInfecciosa);
         m.put("fracao_assintomatica", fracAssintomatica);
