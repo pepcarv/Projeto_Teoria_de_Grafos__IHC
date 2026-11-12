@@ -1,6 +1,6 @@
 /*
 ---------------------------------------------------------------------------
-Projeto da Disciplina de Teoria dos Grafos - Parte 2
+Projeto da Disciplina de Teoria dos Grafos - Partes 2 e 3
 Arquivo: TesteGrafoMatriz.java
 Conteudo: Aplicacao com menu de opcoes (usando Scanner) para ler, gravar,
           consultar e editar o grafo da malha metroferroviaria de Sao
@@ -10,6 +10,10 @@ Conteudo: Aplicacao com menu de opcoes (usando Scanner) para ler, gravar,
      
 autor Pedro Henrique Carvalho Pereira - 10418861
 autor Mateus Ribeiro Cerqueira - 10443901
+
+Compilação e Execução:
+javac -d . TGrafo.java TesteGrafoMatriz.java
+java GrafoMatriz.TesteGrafoMatriz
 ---------------------------------------------------------------------------
  */
 
@@ -60,6 +64,11 @@ public class TesteGrafoMatriz {
 				case 7: opcaoMostrarConteudo(); break;
 				case 8: opcaoMostrarGrafo(); break;
 				case 9: opcaoConexidade(); break;
+				case 10: opcaoColoracao(); break;
+				case 11: opcaoGraus(); break;
+				case 12: opcaoMaiorGrau(); break;
+				case 13: opcaoEuleriano(); break;
+				case 14: opcaoPercursoEuleriano(); break;
 
 				case 0: System.out.println("fim"); break;
 				default: System.out.println("Opcao invalida...");
@@ -84,6 +93,11 @@ public class TesteGrafoMatriz {
 		System.out.println("h) 8 - Mostrar grafo (matriz de adjacencia)");
 		System.out.println("i) 9 - Apresentar conexidade do grafo e o reduzido");
 		System.out.println("j) 0 - Encerrar a aplicacao");
+		System.out.println("k) 10 - Coloracao (quantidade de particoes)");
+		System.out.println("l) 11 - Grau dos vertices");
+		System.out.println("m) 12 - Vertice com maior grau");
+		System.out.println("n) 13 - Verificar se e grafo Euleriano");
+		System.out.println("o) 14 - Verificar se tem percurso Euleriano");
 		System.out.println("");
 		System.out.print("Escolha uma opcao: ");
 	}
@@ -265,6 +279,51 @@ public class TesteGrafoMatriz {
 	}
 
 
+
+
+	// -------------------- PARTE 3 - Novas opcoes --------------------
+
+	//metodo baseado nas aulas de coloracao sequencial e por classe
+	private static void opcaoColoracao() {
+		// escolher o algoritmo; calcular e apresentar as classes C1, ..., Ck
+		if (!verificaGrafoCarregado()) return;
+		System.out.println("1 - Coloracao Sequencial");
+		System.out.println("2 - Coloracao por Classe (Welsh e Powell)");
+		System.out.println("3 - Apresentar ambas e comparar");
+		System.out.print("Escolha o algoritmo: ");
+		int algoritmo = lerInt();
+		if (algoritmo == 1 || algoritmo == 3) g.apresentarColoracao(1);
+		if (algoritmo == 2 || algoritmo == 3) g.apresentarColoracao(2);
+		if (algoritmo < 1 || algoritmo > 3) System.out.println("Opcao de coloracao invalida.");
+	}
+
+	//metodo baseado na aula de graus dos vertices (soma das adjacencias)
+	private static void opcaoGraus() {
+		// para cada vertice vi: apresentar d(vi)
+		if (!verificaGrafoCarregado()) return;
+		g.apresentarGraus();
+	}
+
+	//metodo baseado na aula de graus dos vertices (busca do maior grau)
+	private static void opcaoMaiorGrau() {
+		// maior <- max {d(vi)} para os vertices ativos
+		if (!verificaGrafoCarregado()) return;
+		g.apresentarMaiorGrau();
+	}
+
+	//esse metodo foi baseado na aula de caminhos eulerianos (circuito fechado)
+	private static void opcaoEuleriano() {
+		// verificar graus e conexidade para classificar o grafo
+		if (!verificaGrafoCarregado()) return;
+		g.apresentarEuleriano();
+	}
+
+	//esse metodo foi baseado na aula de caminhos eulerianos (percurso aberto ou fechado)
+	private static void opcaoPercursoEuleriano() {
+		// testar se ha 0 ou 2 vertices impares, ou os equivalentes orientados
+		if (!verificaGrafoCarregado()) return;
+		g.apresentarPercursoEuleriano();
+	}
 
 
 

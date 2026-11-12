@@ -1,6 +1,6 @@
 /*
 ---------------------------------------------------------------------------
-Projeto da Disciplina de Teoria dos Grafos - Parte 2
+Projeto da Disciplina de Teoria dos Grafos - Partes 2 e 3
 Arquivo: TGrafo.java
 Conteudo: Estrutura de Grafo implementada como Matriz de Adjacencia,
           estendida a partir da classe apresentada em aula para suportar
@@ -10,7 +10,11 @@ Conteudo: Estrutura de Grafo implementada como Matriz de Adjacencia,
           (incluindo o algoritmo FCONEX para componentes fortemente conexas).
 
 autor Pedro Henrique Carvalho Pereira - 10418861
-autor Mateus Ribeiro Cerqueira - 10443901    
+autor Mateus Ribeiro Cerqueira - 10443901 
+
+Compilação e Execução:
+javac -d . TGrafo.java TesteGrafoMatriz.java
+java GrafoMatriz.TesteGrafoMatriz 
 ---------------------------------------------------------------------------
  */
 
@@ -773,4 +777,280 @@ public class TGrafo {
 			System.out.println("nenhuma aresta entre componentes distintas");
 		}
 	}
+	// -------------------- PARTE 3 - Grau, coloracao e percursos eulerianos --------------------
+
+	//metodo baseado na aula de graus dos vertices e no Teorema 1 de Euler
+	public int grauEntrada(int v) {
+		// d-(v) <- soma das entradas da coluna v da matriz de adjacencia
+		if (!estaAtivo(v)) return 0;
+		int grau = 0;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && existeA[i][v]) grau++;
+		}
+		return grau;
+	}
+
+	//metodo baseado na aula de graus dos vertices e no Teorema 1 de Euler
+	public int grauSaida(int v) {
+		// d+(v) <- soma das saidas da linha v da matriz de adjacencia
+		if (!estaAtivo(v)) return 0;
+		int grau = 0;
+		for (int j = 0; j <= maiorIndice; j++) {
+			if (ativo[j] && existeA[v][j]) grau++;
+		}
+		return grau;
+	}
+
+	//metodo baseado na aula de graus dos vertices e no Teorema 1 de Euler
+	public int grauVertice(int v) {
+		// se orientado: d(v) <- d+(v) + d-(v)
+		if (!estaAtivo(v)) return 0;
+		if (orientado) return grauSaida(v) + grauEntrada(v);
+
+		// se nao orientado: d(v) <- numero de vizinhos; laco conta duas vezes
+		// a leitura de TXT pode guardar somente uma direcao da aresta nao orientada
+		int grau = 0;
+		for (int j = 0; j <= maiorIndice; j++) {
+			if (ativo[j] && (existeA[v][j] || existeA[j][v])) {
+				grau += (j == v) ? 2 : 1;
+			}
+		}
+		return grau;
+	}
+
+	//metodo baseado na aula de graus dos vertices e no Teorema 1 de Euler
+	public void apresentarGraus() {
+		// para cada vertice vi em V: calcular e apresentar d(vi)
+		if (n == 0) {
+			System.out.println("O grafo esta vazio.");
+			return;
+		}
+		System.out.println("\n--- Graus dos vertices ---");
+		int somaGraus = 0;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (!ativo[i]) continue;
+			int grau = grauVertice(i);
+			somaGraus += grau;
+			if (orientado) {
+				System.out.println(i + " - " + rotulo[i] + " | entrada: " + grauEntrada(i)
+						+ " | saida: " + grauSaida(i) + " | total: " + grau);
+			} else {
+				System.out.println(i + " - " + rotulo[i] + " | grau: " + grau);
+			}
+		}
+		// Teorema 1: somatorio d(vi) = 2 * numero de arestas
+		System.out.println("Soma dos graus: " + somaGraus + " (Teorema 1: 2 vezes o numero de arestas).");
+	}
+
+	//metodo baseado na aula de graus dos vertices, aplicando comparacao do maior grau
+	public void apresentarMaiorGrau() {
+		// maior <- -1; para cada vi: se d(vi) > maior, maior <- d(vi)
+		if (n == 0) {
+			System.out.println("O grafo esta vazio.");
+			return;
+		}
+		int maior = -1;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && grauVertice(i) > maior) maior = grauVertice(i);
+		}
+		System.out.println("\n--- Vertice(s) com maior grau ---");
+		System.out.println("Maior grau " + (orientado ? "total" : "") + ": " + maior);
+		// para cada vi: se d(vi) = maior, mostrar vi (inclui empates)
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && grauVertice(i) == maior) {
+				System.out.println(i + " - " + rotulo[i] + " | grau: " + maior);
+			}
+		}
+	}
+
+	//metodo auxiliar baseado nas aulas de coloracao: N(i) e conjunto de vizinhos
+	private boolean podeUsarCor(int v, int k, int[] cores) {
+		// se N(v) intersecao Ck = vazio, retorna verdadeiro
+		for (int j = 0; j <= maiorIndice; j++) {
+			// no grafo orientado, colorir o subjacente: qualquer direcao indica vizinhanca
+			if (ativo[j] && (existeA[v][j] || existeA[j][v]) && cores[j] == k) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//metodo baseado na aula de coloracao sequencial (algoritmo do professor)
+	private int[] coloracaoSequencial() {
+		// Ci <- vazio (i = 1, ..., n); k <- 1;
+		int[] cores = new int[CAPACIDADE]; // 0 indica vertice ainda sem cor
+		// para i <- 1 ate n faca (aqui percorremos os indices ativos)
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (!ativo[i]) continue;
+			int k = 1;
+			// se N(i) intersecao Ck = vazio, Ck <- Ck uniao {i}
+			// senao k <- k + 1 e repete o teste
+			while (!podeUsarCor(i, k, cores)) k++;
+			cores[i] = k;
+			// k <- 1 para o proximo vertice
+		}
+		return cores;
+	}
+
+	//metodo baseado na aula de coloracao por classe (Welsh e Powell)
+	private int[] coloracaoPorClasse() {
+		// Ci <- vazio (i = 1, ..., n); W <- V; k <- 1;
+		int[] cores = new int[CAPACIDADE];
+		boolean[] W = new boolean[CAPACIDADE];
+		int restantes = n;
+		for (int i = 0; i <= maiorIndice; i++) W[i] = ativo[i];
+		int k = 1;
+		// enquanto W != vazio faca
+		while (restantes > 0) {
+			// para cada i em W faca
+			for (int i = 0; i <= maiorIndice; i++) {
+				if (!W[i]) continue;
+				// se N(i) intersecao Ck = vazio, Ck <- Ck uniao {i}
+				if (podeUsarCor(i, k, cores)) {
+					cores[i] = k;
+					W[i] = false; // W <- W - {i}
+					restantes--;
+				}
+			}
+			k++; // k <- k + 1 (proxima classe)
+		}
+		return cores;
+	}
+
+	//metodo baseado nas aulas de coloracao: verifica se o grafo admite coloracao propria
+	private boolean possuiLaco() {
+		// para cada vi: se (vi,vi) pertence a E, nao existe coloracao propria
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && existeA[i][i]) return true;
+		}
+		return false;
+	}
+
+	//metodo baseado nas aulas de coloracao: apresenta as particoes cromaticas
+	public void apresentarColoracao(int algoritmo) {
+		// calcular C1,...,Ck e apresentar a quantidade de classes (cores)
+		if (n == 0) {
+			System.out.println("O grafo esta vazio.");
+			return;
+		}
+		if (possuiLaco()) {
+			System.out.println("Nao e possivel uma coloracao propria: existe laco em vertice ativo.");
+			return;
+		}
+		if (algoritmo != 1 && algoritmo != 2) {
+			System.out.println("Algoritmo de coloracao invalido.");
+			return;
+		}
+		int[] cores = (algoritmo == 1) ? coloracaoSequencial() : coloracaoPorClasse();
+		int totalClasses = 0;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && cores[i] > totalClasses) totalClasses = cores[i];
+		}
+		System.out.println("\n--- " + (algoritmo == 1 ? "Coloracao Sequencial" : "Coloracao por Classe (Welsh e Powell)") + " ---");
+		System.out.println("Quantidade de particoes (cores): " + totalClasses);
+		if (orientado) System.out.println("Coloracao feita sobre as adjacencias do grafo subjacente nao orientado.");
+		// para cada Ck, apresentar os vertices pertencentes a classe
+		for (int k = 1; k <= totalClasses; k++) {
+			StringBuilder classe = new StringBuilder("Classe " + k + ": { ");
+			for (int i = 0; i <= maiorIndice; i++) {
+				if (ativo[i] && cores[i] == k) classe.append(rotulo[i]).append("(").append(i).append(") ");
+			}
+			System.out.println(classe.append("}").toString());
+		}
+		System.out.println("Observacao: o numero de cores encontrado nao garante o numero cromatico minimo.");
+	}
+
+	//metodo auxiliar baseado na aula de caminhos eulerianos e na conexidade por DFS
+	private boolean conexoEntreVerticesComArestas() {
+		// inicio <- primeiro vertice com grau > 0; DFS no grafo subjacente
+		int inicio = -1;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && grauVertice(i) > 0) {
+				inicio = i;
+				break;
+			}
+		}
+		if (inicio == -1) return n > 0; // grafo sem arestas: percurso trivial
+		boolean[] visitado = new boolean[CAPACIDADE];
+		dfsSubjacente(inicio, visitado); // reutiliza o DFS da Parte 2
+		// para cada vi incidente a arestas, verificar se foi visitado
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (ativo[i] && grauVertice(i) > 0 && !visitado[i]) return false;
+		}
+		return true;
+	}
+
+	//esse metodo foi baseado na aula de caminhos eulerianos (Teorema dos graus pares)
+	public boolean ehEuleriano() {
+		// se G nao tem vertices ou as arestas estao desconectadas: falso
+		if (n == 0 || !conexoEntreVerticesComArestas()) return false;
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (!ativo[i]) continue;
+			if (orientado) {
+				// grafo orientado: para todo vi, d+(vi) = d-(vi)
+				if (grauSaida(i) != grauEntrada(i)) return false;
+			} else {
+				// grafo nao orientado: para todo vi, d(vi) mod 2 = 0
+				if (grauVertice(i) % 2 != 0) return false;
+			}
+		}
+		return true; // existe circuito euleriano
+	}
+
+	//metodo foi baseado na aula de caminhos eulerianos e nas condicoes para grafos orientados
+	public boolean temPercursoEuleriano() {
+		// um percurso euleriano usa cada aresta uma unica vez; pode ser aberto ou fechado
+		if (n == 0 || !conexoEntreVerticesComArestas()) return false;
+		int qtde = 0;
+		int inicios = 0, fins = 0;
+		// para cada vertice i: calcular grau e verificar condicao euleriana
+		for (int i = 0; i <= maiorIndice; i++) {
+			if (!ativo[i]) continue;
+			if (!orientado) {
+				// algoritmo caminhoEuleriano() do professor: se grau mod 2 = 1, qtde++
+				if (grauVertice(i) % 2 == 1) qtde++;
+				if (qtde > 2) return false;
+			} else {
+				// adaptacao ao grafo orientado: diferenca entre grau de saida e entrada
+				int diferenca = grauSaida(i) - grauEntrada(i);
+				if (diferenca == 1) inicios++;
+				else if (diferenca == -1) fins++;
+				else if (diferenca != 0) return false;
+			}
+		}
+		// nao orientado: 0 ou 2 vertices impares; orientado: todos equilibrados ou 1 inicio e 1 fim
+		return orientado ? ((inicios == 0 && fins == 0) || (inicios == 1 && fins == 1))
+				: (qtde == 0 || qtde == 2);
+	}
+
+	//metodo foi baseado na aula de caminhos eulerianos: relatorio do circuito
+	public void apresentarEuleriano() {
+		// resultado <- verifica se G admite um caminho euleriano fechado
+		if (n == 0) {
+			System.out.println("O grafo esta vazio.");
+			return;
+		}
+		System.out.println("\n--- Verificacao de grafo Euleriano ---");
+		System.out.println("O grafo e Euleriano? " + (ehEuleriano() ? "SIM" : "NAO"));
+		System.out.println(orientado ? "Criterio: entrada = saida em cada vertice e conexidade entre arestas."
+				: "Criterio: todos os graus pares e conexidade entre arestas.");
+	}
+
+	//metodo foi baseado na aula de caminhos eulerianos: algoritmo caminhoEuleriano()
+	public void apresentarPercursoEuleriano() {
+		// resultado <- verifica se G admite percurso aberto ou fechado
+		if (n == 0) {
+			System.out.println("O grafo esta vazio.");
+			return;
+		}
+		System.out.println("\n--- Verificacao de percurso Euleriano ---");
+		boolean existe = temPercursoEuleriano();
+		System.out.println("Existe percurso Euleriano? " + (existe ? "SIM" : "NAO"));
+		if (existe) {
+			System.out.println(ehEuleriano() ? "Tipo: FECHADO (circuito Euleriano)." : "Tipo: ABERTO (semi-Euleriano).");
+		}
+		System.out.println(orientado ? "Criterio: graus de entrada/saida e conexidade entre arestas."
+				: "Criterio: no maximo dois vertices de grau impar e conexidade entre arestas.");
+	}
+
 }
