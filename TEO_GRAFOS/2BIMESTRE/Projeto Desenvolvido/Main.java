@@ -423,9 +423,16 @@ public class Main {
         MalhaMetroferroviaria.Saida.escrever(dir.resolve("percurso_detalhado.csv"), csv);
 
         MalhaMetroferroviaria.graficoLinhas(dir.resolve("probabilidade_acumulada.png"),
-                "Probabilidade acumulada de transmissão · " + malha.nos.get(o).estacao + " → " + malha.nos.get(d).estacao + " · " + MalhaMetroferroviaria.MESES[cfg.mes],
-
-                "Nº de estações percorridas", "P acumulada (condicionada à presença de infectado)", series);
+                "Probabilidade acumulada de transmissão ao longo do percurso · "
+                        + malha.nos.get(o).estacao + " → " + malha.nos.get(d).estacao
+                        + " · " + MalhaMetroferroviaria.MESES[cfg.mes],
+                "Estações percorridas [ordem no trajeto]",
+                "Probabilidade acumulada de transmissão [0–1]", series,
+                List.of(
+                        "λ_i = β · w_i · k · t_i / 1440; p_i = aplicarOR(1 − exp(−λ_i), OR)",
+                        "P_acum(m) = 1 − ∏(1 − p_i), de i = 1 até m.",
+                        "Probabilidade condicional: presume k infectado(s) em cada estação do percurso."
+                ));
 
         Map<String, Object> m = meta("E1/E2 percurso", cfg);
         m.put("origem", malha.nos.get(o).rotulo()); m.put("destino", malha.nos.get(d).rotulo());
@@ -481,27 +488,42 @@ public class Main {
         MalhaMetroferroviaria.Saida.escrever(dir.resolve("estacoes_resultado.csv"), e);
 
         double[] x = MalhaMetroferroviaria.seq(r.dias + 1);
-        MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_infecciosos.png"), "Pessoas infecciosas (média e P5-P95, " + r.execucoes + " execuções)",
-
-                "Dia", "Nº de pessoas infecciosas (população simulada)", List.of(new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, r.p5I, r.p95I, MalhaMetroferroviaria.PALETA[1])));
+        MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_infecciosos.png"),
+                "Pessoas infecciosas ao longo do tempo · " + MalhaMetroferroviaria.MESES[cfg.mes]
+                        + " · " + listarSementes(),
+                "Dia da simulação [dias]", "Pessoas infecciosas [indivíduos simulados]",
+                List.of(new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, r.p5I, r.p95I,
+                        MalhaMetroferroviaria.PALETA[1])),
+                List.of("Faixa sombreada = percentis P5–P95 entre execuções Monte Carlo.",
+                        "I(t) = número médio de indivíduos infecciosos na população simulada."));
         // O alcance representa estações; os compartimentos SEIR representam pessoas.
         // Em figuras separadas, cada eixo vertical conserva sua própria unidade.
         MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_alcance.png"),
-                "Alcance acumulado da disseminação", "Dia", "Estações alcançadas",
+                "Alcance acumulado da disseminação na rede · " + MalhaMetroferroviaria.MESES[cfg.mes]
+                        + " · " + listarSementes(),
+                "Dia da simulação [dias]", "Estações alcançadas [nós da rede]",
                 List.of(new MalhaMetroferroviaria.Serie("Alcance médio (P5–P95)",
-                        x, r.mAlc, r.p5A, r.p95A, MalhaMetroferroviaria.PALETA[0])));
+                        x, r.mAlc, r.p5A, r.p95A, MalhaMetroferroviaria.PALETA[0])),
+                List.of("Faixa sombreada = percentis P5–P95 entre execuções Monte Carlo.",
+                        "Alcance = número acumulado de estações atingidas pela disseminação."));
 
         MalhaMetroferroviaria.graficoLinhas(dir.resolve("curva_compartimentos.png"),
-                "Evolução dos compartimentos SEIR", "Dia", "Pessoas simuladas",
+                "Evolução dos compartimentos SEIR · " + MalhaMetroferroviaria.MESES[cfg.mes]
+                        + " · " + listarSementes(),
+                "Dia da simulação [dias]", "Pessoas simuladas [indivíduos]",
                 List.of(new MalhaMetroferroviaria.Serie("Expostos (E)", x, r.mE, null, null,
                                 MalhaMetroferroviaria.PALETA[3]),
                         new MalhaMetroferroviaria.Serie("Infecciosos (I)", x, r.mI, null, null,
                                 MalhaMetroferroviaria.PALETA[1]),
                         new MalhaMetroferroviaria.Serie("Removidos (R)", x, r.mR, null, null,
-                                MalhaMetroferroviaria.PALETA[2])));
-        malha.mapa(dir.resolve("mapa_prob_alcance.png"), "Probabilidade de alcance por estação · " + MalhaMetroferroviaria.MESES[cfg.mes],
-
-                r.probAlcance, 1.0, "prob. de alcance", cfg.sementes, cfg.mes);
+                                MalhaMetroferroviaria.PALETA[2])),
+                List.of("SEIR: suscetíveis → expostos → infecciosos → removidos.",
+                        "Cada curva representa a média sobre as execuções Monte Carlo."));
+        malha.mapa(dir.resolve("mapa_prob_alcance.png"),
+                "Probabilidade de a estação ser alcançada pela disseminação · " + MalhaMetroferroviaria.MESES[cfg.mes],
+                r.probAlcance, 1.0, "Probabilidade de alcance [0–1]", cfg.sementes, cfg.mes,
+                List.of("P(alcance) = execuções com a estação atingida / total de execuções.",
+                        "Bolhas maiores indicam maior demanda; borda espessa = semente inicial."));
 
         Map<String, Object> m = meta("E3/E6 disseminação", cfg); m.put("resumo", resumoMap(r));
         MalhaMetroferroviaria.Saida.json(dir.resolve("metadados.json"), m);
@@ -545,11 +567,21 @@ public class Main {
             sI.add(new MalhaMetroferroviaria.Serie(rot.get(i), x, r.mI, null, null, cor));
         }
         MalhaMetroferroviaria.Saida.escrever(dir.resolve("resumo_comparacao.csv"), csv);
-        MalhaMetroferroviaria.graficoLinhas(dir.resolve("alcance_medio.png"), titulo + " · alcance acumulado médio", "Dia", "Nº de nós alcançados", sA);
+        List<String> notasComparacao = List.of(
+                "Comparação dos cenários com os mesmos nós-semente: " + listarSementes(),
+                "Médias entre execuções Monte Carlo. Horizonte: " + cfgs.get(0).dias + " dias.");
+        MalhaMetroferroviaria.graficoLinhas(dir.resolve("alcance_medio.png"),
+                titulo + " · estações alcançadas ao longo do tempo", "Dia da simulação [dias]",
+                "Estações alcançadas [nós da rede]", sA, notasComparacao);
 
-        MalhaMetroferroviaria.graficoLinhas(dir.resolve("infecciosos_medio.png"), titulo + " · infecciosos médios", "Dia", "Nº de pessoas infecciosas", sI);
+        MalhaMetroferroviaria.graficoLinhas(dir.resolve("infecciosos_medio.png"),
+                titulo + " · pessoas infecciosas ao longo do tempo", "Dia da simulação [dias]",
+                "Pessoas infecciosas [indivíduos simulados]", sI, notasComparacao);
 
-        MalhaMetroferroviaria.graficoBarras(dir.resolve("alcance_final.png"), titulo + " · taxa de ataque média", "% da população simulada infectada", rot, fin);
+        MalhaMetroferroviaria.graficoBarras(dir.resolve("alcance_final.png"),
+                titulo + " · taxa de ataque média", "% da população simulada infectada", rot, fin,
+                List.of("Taxa de ataque = (total de pessoas infectadas / população simulada) × 100.",
+                        "Sementes fixas: " + listarSementes()));
 
         Map<String, Object> m = meta(prefixo, cfg); m.put("cenarios_comparados", rot);
         Map<String, Object> res = new LinkedHashMap<>(); for (MalhaMetroferroviaria.Resultado r : rs) res.put(r.rotulo, resumoMap(r));
@@ -615,11 +647,20 @@ public class Main {
         }
         MalhaMetroferroviaria.Saida.escrever(dir.resolve("ranking.csv"), csv);
 
-        MalhaMetroferroviaria.graficoBarras(dir.resolve("top20_impacto.png"), "Top 20 estações por impacto simulado (semente única)", "alcance final médio (nós)",
-                rot, vals.stream().mapToDouble(Double::doubleValue).toArray());
+        MalhaMetroferroviaria.graficoBarras(dir.resolve("top20_impacto.png"),
+                "Top 20 estações por impacto quando usadas como semente única · "
+                        + MalhaMetroferroviaria.MESES[cfg.mes],
+                "Alcance final médio [estações alcançadas]",
+                rot, vals.stream().mapToDouble(Double::doubleValue).toArray(),
+                List.of("Cada barra apresenta o alcance final médio usando uma única estação como semente.",
+                        "Impacto = número médio de estações alcançadas ao final da simulação."));
 
         double mx = Arrays.stream(imp).max().orElse(1);
-        malha.mapa(dir.resolve("mapa_impacto.png"), "Impacto simulado por estação-semente · " + MalhaMetroferroviaria.MESES[cfg.mes], imp, mx, "alcance médio (nós)", null, cfg.mes);
+        malha.mapa(dir.resolve("mapa_impacto.png"),
+                "Impacto de cada estação quando usada como semente única · " + MalhaMetroferroviaria.MESES[cfg.mes],
+                imp, mx, "Alcance médio [estações]", null, cfg.mes,
+                List.of("Cada nó é avaliado separadamente como semente única.",
+                        "Cor = impacto simulado; tamanho do nó = demanda mensal."));
 
         Map<String, Object> m = meta("ranking", c); m.put("execucoes_por_estacao", ex);
         MalhaMetroferroviaria.Saida.json(dir.resolve("metadados.json"), m);
@@ -649,7 +690,11 @@ public class Main {
         Path dir = MalhaMetroferroviaria.Saida.novaPasta(pastaBase, "mapa_demanda");
         double[] w = malha.rede(cfg.mes, 0).w;
 
-        malha.mapa(dir.resolve("mapa_demanda.png"), "Demanda normalizada por estação · " + MalhaMetroferroviaria.MESES[cfg.mes], w, 1.0, "peso w (D/Dmax)", null, cfg.mes);
+        malha.mapa(dir.resolve("mapa_demanda.png"),
+                "Demanda normalizada de passageiros por estação · " + MalhaMetroferroviaria.MESES[cfg.mes],
+                w, 1.0, "Demanda normalizada [D_i / D_max]", null, cfg.mes,
+                List.of("Cor = demanda da estação dividida pela maior demanda do mês.",
+                        "Bolhas maiores indicam estações de maior demanda mensal."));
         MalhaMetroferroviaria.Saida.json(dir.resolve("metadados.json"), meta("mapa_demanda", cfg));
 
         System.out.println("Arquivos salvos em: " + dir);

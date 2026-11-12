@@ -1191,6 +1191,7 @@ public class MalhaMetroferroviaria {
     private static final Font FONTE_EIXO = new Font("SansSerif", Font.BOLD, 34);
     private static final Font FONTE_NUMERO = new Font("SansSerif", Font.PLAIN, 29);
     private static final Font FONTE_LEGENDA = new Font("SansSerif", Font.PLAIN, 27);
+    private static final Font FONTE_NOTA = new Font("SansSerif", Font.PLAIN, 22);
 
     // Cores usadas no exemplo aprovado (vermelho, azul, verde, laranja etc.).
     private static final Color[] CORES_CIENTIFICAS = {
@@ -1268,6 +1269,25 @@ public class MalhaMetroferroviaria {
         return texto.substring(0, limite) + "…";
     }
 
+    // Quebra rótulos longos do mapa em linhas, sem ocultá-los por reticências.
+    private static List<String> quebrarRotulo(Graphics2D g, String texto, int largura) {
+        List<String> partes = new ArrayList<>();
+        StringBuilder atual = new StringBuilder();
+        for (String palavra : texto.split(" ")) {
+            String candidato = atual.length() == 0 ? palavra : atual + " " + palavra;
+            if (atual.length() > 0 && g.getFontMetrics().stringWidth(candidato) > largura) {
+                partes.add(atual.toString());
+                atual.setLength(0);
+                atual.append(palavra);
+            } else {
+                atual.setLength(0);
+                atual.append(candidato);
+            }
+        }
+        if (atual.length() > 0) partes.add(atual.toString());
+        return partes;
+    }
+
     private static void centralizar(Graphics2D g, String texto, int x, int y) {
         FontMetrics fm = g.getFontMetrics();
         g.drawString(texto, x - fm.stringWidth(texto) / 2, y);
@@ -1288,6 +1308,28 @@ public class MalhaMetroferroviaria {
             String complemento = abreviar(g, partes[1], largura - 140);
             centralizar(g, complemento, centro, 123);
         }
+    }
+
+    private static int caixaNotas(Graphics2D g, int x, int y, int largura, List<String> notas) {
+        if (notas == null || notas.isEmpty()) {
+            return y;
+        }
+        g.setFont(FONTE_NOTA);
+        int linha = 30;
+        int padding = 16;
+        int altura = padding * 2 + notas.size() * linha;
+        g.setColor(new Color(250, 250, 250, 235));
+        g.fillRoundRect(x, y, largura, altura, 16, 16);
+        g.setColor(new Color(120, 120, 120));
+        g.setStroke(new BasicStroke(1.4f));
+        g.drawRoundRect(x, y, largura, altura, 16, 16);
+        g.setColor(COR_TEXTO);
+        int py = y + padding + 22;
+        for (String nota : notas) {
+            g.drawString(abreviar(g, nota, largura - 2 * padding), x + padding, py);
+            py += linha;
+        }
+        return y + altura;
     }
 
     private static BasicStroke tracoSerie(int indice, float espessura) {
@@ -1413,17 +1455,20 @@ public class MalhaMetroferroviaria {
     // A indicação completa do contexto continua no CSV e nos metadados.
     // No gráfico, rótulos curtos preservam espaço para os valores.
     private static String rotuloEixo(String eixo) {
-        if (eixo.equals("Nº de estações percorridas")) {
-            return "Estações percorridas";
+        if (eixo.equals("Nº de estações percorridas") || eixo.equals("Estações percorridas [ordem no trajeto]")) {
+            return "Estações percorridas [ordem no trajeto]";
         }
-        if (eixo.startsWith("P acumulada (condicionada")) {
-            return "Probabilidade acumulada";
+        if (eixo.startsWith("P acumulada") || eixo.startsWith("Probabilidade acumulada")) {
+            return "Probabilidade acumulada de transmissão [0–1]";
         }
-        if (eixo.startsWith("Nº de pessoas infecciosas")) {
-            return "Pessoas infecciosas";
+        if (eixo.startsWith("Nº de pessoas infecciosas") || eixo.startsWith("Pessoas infecciosas")) {
+            return "Pessoas infecciosas [indivíduos simulados]";
         }
-        if (eixo.equals("Nº de nós alcançados")) {
-            return "Estações alcançadas";
+        if (eixo.equals("Nº de nós alcançados") || eixo.startsWith("Estações alcançadas")) {
+            return "Estações alcançadas [nós da rede]";
+        }
+        if (eixo.startsWith("Dia")) {
+            return "Dia da simulação [dias]";
         }
         return eixo;
     }
@@ -1456,6 +1501,11 @@ public class MalhaMetroferroviaria {
 
     public static void graficoLinhas(Path arq, String titulo, String xl, String yl,
                                     List<Serie> series) throws IOException {
+        graficoLinhas(arq, titulo, xl, yl, series, null);
+    }
+
+    public static void graficoLinhas(Path arq, String titulo, String xl, String yl,
+                                    List<Serie> series, List<String> notas) throws IOException {
         if (series.isEmpty()) {
             throw new IOException("Não há séries para desenhar: " + titulo);
         }
@@ -1480,25 +1530,25 @@ public class MalhaMetroferroviaria {
             }
         }
 
-        int larguraImagem = 2100;
-        int alturaImagem = Math.max(1160, 610 + visiveis.size() * 47);
-        int esquerda = 210;
+        // Layout em três regiões exclusivas: curvas (esquerda), legenda (direita)
+        // e informações / eixo X (abaixo). Assim nenhum texto cobre valores.
+        int qtdNotas = notas == null ? 0 : notas.size();
+        int larguraImagem = 2600;
+        int alturaImagem = Math.max(qtdNotas > 0 ? 1270 : 1190,
+                670 + visiveis.size() * 47 + (qtdNotas > 0 ? 130 : 0));
+        int esquerda = 215;
         int superior = 188;
-        int inferior = alturaImagem - 195;
+        int margemInferior = qtdNotas > 0 ? Math.max(305, 230 + qtdNotas * 30) : 180;
+        int inferior = alturaImagem - margemInferior;
         int alturaGrafico = inferior - superior;
-        // Com poucas series a legenda fica dentro da figura, como no modelo aprovado.
-        // Para muitas series usa-se a faixa direita para evitar encobrir as curvas.
-        boolean legendaExterna = visiveis.size() > 7;
-        int direita = 1850;
-        if (legendaExterna) {
-            direita = 1480;
-        }
+        int direita = 1870;
         int larguraGrafico = direita - esquerda;
 
         BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
                 BufferedImage.TYPE_INT_RGB);
         Graphics2D g = nova(imagem);
         tituloFigura(g, titulo, larguraImagem);
+        int rodapeNotas = inferior + 86;
 
         double minimoX = Double.POSITIVE_INFINITY;
         double maximoX = Double.NEGATIVE_INFINITY;
@@ -1540,7 +1590,8 @@ public class MalhaMetroferroviaria {
         g.setColor(Color.WHITE);
         g.fillRect(esquerda, superior, larguraGrafico, alturaGrafico);
         g.setFont(FONTE_NUMERO);
-        for (int i = 0; i <= 9; i++) {
+        int totalMarcasY = Math.max(1, (int) Math.round(tetoY / passoY));
+        for (int i = 0; i <= totalMarcasY; i++) {
             double valor = i * passoY;
             if (valor > tetoY + passoY * 1e-7) {
                 break;
@@ -1633,9 +1684,13 @@ public class MalhaMetroferroviaria {
         g.setStroke(new BasicStroke(2.2f));
         g.drawRect(esquerda, superior, larguraGrafico, alturaGrafico);
 
+        if (notas != null && !notas.isEmpty()) {
+            caixaNotas(g, esquerda + 10, rodapeNotas, larguraGrafico - 20, notas);
+        }
+
         g.setFont(FONTE_EIXO);
         g.setColor(COR_TEXTO);
-        centralizar(g, rotuloEixo(xl), esquerda + larguraGrafico / 2, alturaImagem - 68);
+        centralizar(g, rotuloEixo(xl), esquerda + larguraGrafico / 2, alturaImagem - 46);
         g.rotate(-Math.PI / 2);
         centralizar(g, rotuloEixo(yl), -(superior + alturaGrafico / 2), 61);
         g.rotate(Math.PI / 2);
@@ -1649,30 +1704,10 @@ public class MalhaMetroferroviaria {
         for (String nome : nomes) {
             textoMaximo = Math.max(textoMaximo, g.getFontMetrics().stringWidth(nome));
         }
-        int legendaLargura = textoMaximo + 137;
-        if (legendaExterna) {
-            legendaLargura = Math.min(legendaLargura, larguraImagem - direita - 45);
-        } else {
-            legendaLargura = Math.min(legendaLargura, larguraGrafico - 55);
-        }
-        int legendaX = direita - legendaLargura - 18;
-        if (legendaExterna) {
-            legendaX = direita + 24;
-        }
+        int legendaLargura = Math.min(textoMaximo + 137, larguraImagem - direita - 62);
+        int legendaX = direita + 24;
         int legendaY = superior + 18;
         int alturaLegenda = 2 * margemLegenda + visiveis.size() * alturaLinha;
-        if (!legendaExterna) {
-            int esquerdaAlternativa = esquerda + 18;
-            int interferenciasDireita = interferenciasLegenda(visiveis, legendaX, legendaY,
-                    legendaLargura, alturaLegenda, minimoX, maximoX, tetoY,
-                    esquerda, inferior, larguraGrafico, alturaGrafico);
-            int interferenciasEsquerda = interferenciasLegenda(visiveis, esquerdaAlternativa, legendaY,
-                    legendaLargura, alturaLegenda, minimoX, maximoX, tetoY,
-                    esquerda, inferior, larguraGrafico, alturaGrafico);
-            if (interferenciasDireita >= 3 && interferenciasEsquerda < interferenciasDireita) {
-                legendaX = esquerdaAlternativa;
-            }
-        }
         g.setColor(new Color(255, 255, 255, 225));
         g.fillRoundRect(legendaX, legendaY, legendaLargura, alturaLegenda, 12, 12);
         g.setColor(Color.BLACK);
@@ -1706,6 +1741,11 @@ public class MalhaMetroferroviaria {
 
     public static void graficoBarras(Path arq, String titulo, String eixo,
                                      List<String> rotulos, double[] valores) throws IOException {
+        graficoBarras(arq, titulo, eixo, rotulos, valores, null);
+    }
+
+    public static void graficoBarras(Path arq, String titulo, String eixo,
+                                     List<String> rotulos, double[] valores, List<String> notas) throws IOException {
         if (rotulos.size() != valores.length) {
             throw new IOException("As quantidades de rótulos e valores são diferentes.");
         }
@@ -1721,7 +1761,7 @@ public class MalhaMetroferroviaria {
         int superior = 194;
         int alturaGrafico = quantidade * espaco;
         int inferior = superior + alturaGrafico;
-        int alturaImagem = Math.max(750, inferior + 165);
+        int alturaImagem = Math.max(900, inferior + 320);
 
         double maximo = 0;
         for (double valor : valores) {
@@ -1770,12 +1810,14 @@ public class MalhaMetroferroviaria {
                 BufferedImage.TYPE_INT_RGB);
         Graphics2D g = nova(imagem);
         tituloFigura(g, titulo, larguraImagem);
+        int rodapeNotas = inferior + 28;
 
         // Fundo branco com linhas de grade cinza e contorno preto nos quatro lados.
         g.setColor(Color.WHITE);
         g.fillRect(esquerda, superior, larguraGrafico, alturaGrafico);
         g.setFont(FONTE_NUMERO);
-        for (int i = 0; i <= 10; i++) {
+        int totalMarcas = Math.max(1, (int) Math.round(teto / intervalo));
+        for (int i = 0; i <= totalMarcas; i++) {
             double valor = i * intervalo;
             if (valor > teto + intervalo * 1e-7) {
                 break;
@@ -1813,13 +1855,17 @@ public class MalhaMetroferroviaria {
             g.drawString(exibicao, esquerda + tamanho + 20, y + espaco / 2 + 10);
         }
 
+        if (notas != null && !notas.isEmpty()) {
+            caixaNotas(g, esquerda, inferior + 110, Math.min(larguraGrafico + 110, 1180), notas);
+        }
+
         // A borda é desenhada por último, para permanecer preta e completa.
         g.setColor(COR_BORDA);
         g.setStroke(new BasicStroke(2.2f));
         g.drawRect(esquerda, superior, larguraGrafico, alturaGrafico);
         g.setColor(COR_TEXTO);
         g.setFont(FONTE_EIXO);
-        centralizar(g, eixo, esquerda + larguraGrafico / 2, alturaImagem - 65);
+        centralizar(g, eixo, esquerda + larguraGrafico / 2, alturaImagem - 58);
         g.dispose();
         ImageIO.write(imagem, "png", arq.toFile());
     }
@@ -1888,16 +1934,24 @@ public class MalhaMetroferroviaria {
      */
     public void mapa(Path arq, String titulo, double[] valores, double maximo,
                      String legenda, Collection<Integer> sementes, int mes) throws IOException {
+        mapa(arq, titulo, valores, maximo, legenda, sementes, mes, null);
+    }
+
+    public void mapa(Path arq, String titulo, double[] valores, double maximo,
+                     String legenda, Collection<Integer> sementes, int mes, List<String> notas) throws IOException {
         double[][] coordenadas = layout();
         Rede rede = rede(mes, 0);
         int larguraImagem = 2000;
-        int alturaImagem = 1250;
         int esquerda = 92;
         int superior = 153;
         int larguraMapa = 1390;
         int alturaMapa = 960;
         int direitaMapa = esquerda + larguraMapa;
         int inferiorMapa = superior + alturaMapa;
+        int qtdNotas = notas == null ? 0 : notas.size();
+        // A caixa fica INTEIRAMENTE depois da borda inferior do mapa.
+        int yNotas = inferiorMapa + 44;
+        int alturaImagem = Math.max(1340, yNotas + 32 + qtdNotas * 30 + 70);
 
         BufferedImage imagem = new BufferedImage(larguraImagem, alturaImagem,
                 BufferedImage.TYPE_INT_RGB);
@@ -1926,7 +1980,7 @@ public class MalhaMetroferroviaria {
             // A margem interna impede que as estações toquem a borda.
             cx[i] = esquerda + 54 + (int) Math.round(coordenadas[i][0] * (larguraMapa - 108));
             cy[i] = superior + 54 + (int) Math.round(coordenadas[i][1] * (alturaMapa - 108));
-            raios[i] = (int) Math.round(6 + 9 * Math.sqrt(rede.w[i]));
+            raios[i] = (int) Math.round(10 + 12 * Math.sqrt(rede.w[i]));
         }
 
         // Ligações na mesma linha: cinza. Baldeações explícitas: laranja tracejado.
@@ -2015,16 +2069,19 @@ public class MalhaMetroferroviaria {
             g.setColor(gradiente(proporcao));
             g.fillOval(painelX, py - 17, 18, 18);
             g.setColor(COR_TEXTO);
-            String descricao = (i + 1) + ". " + nos.get(id).estacao + " (" + nos.get(id).linhaChave + ")";
+            String descricao = (i + 1) + ". " + nos.get(id).estacao + " (" + nos.get(id).linhaChave + ")" + ((sementes != null && sementes.contains(id)) ? " [semente]" : "");
             g.drawString(abreviar(g, descricao, larguraImagem - painelX - 38), painelX + 27, py);
         }
 
         int legendaY = Math.max(superior + 63 + identificados.size() * passoLinha + 25, 900);
         g.setColor(COR_TEXTO);
-        g.setFont(new Font("SansSerif", Font.BOLD, 24));
-        g.drawString(abreviar(g, legenda, larguraImagem - painelX - 32), painelX, legendaY);
+        g.setFont(new Font("SansSerif", Font.BOLD, 23));
+        List<String> linhasLegenda = quebrarRotulo(g, legenda, larguraImagem - painelX - 28);
+        for (int i = 0; i < linhasLegenda.size(); i++) {
+            g.drawString(linhasLegenda.get(i), painelX, legendaY + 31 * i);
+        }
         int larguraEscala = 385;
-        int escalaY = legendaY + 19;
+        int escalaY = legendaY + 19 + Math.max(0, linhasLegenda.size() - 1) * 31;
         for (int i = 0; i < larguraEscala; i++) {
             g.setColor(gradiente((double) i / Math.max(1, larguraEscala - 1)));
             g.drawLine(painelX + i, escalaY, painelX + i, escalaY + 24);
@@ -2051,10 +2108,18 @@ public class MalhaMetroferroviaria {
         g.drawLine(painelX, escalaY + 148, painelX + 45, escalaY + 148);
         g.setColor(COR_TEXTO);
         g.drawString("Baldeação", painelX + 57, escalaY + 155);
+        if (sementes != null && !sementes.isEmpty()) {
+            g.setColor(Color.WHITE);
+            g.fillOval(painelX + 4, escalaY + 184 - 9, 18, 18);
+            g.setColor(COR_TEXTO);
+            g.setStroke(new BasicStroke(3.4f));
+            g.drawOval(painelX + 4, escalaY + 184 - 9, 18, 18);
+            g.drawString("Borda espessa = semente inicial", painelX + 57, escalaY + 191);
+        }
+        if (notas != null && !notas.isEmpty()) {
+            caixaNotas(g, esquerda, yNotas, 1320, notas);
+        }
 
-        g.setFont(new Font("SansSerif", Font.PLAIN, 21));
-        centralizar(g, "Layout esquemático · tamanho dos nós proporcional à demanda",
-                esquerda + larguraMapa / 2, alturaImagem - 67);
         g.dispose();
         ImageIO.write(imagem, "png", arq.toFile());
     }

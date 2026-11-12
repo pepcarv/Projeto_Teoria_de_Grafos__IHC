@@ -47,11 +47,16 @@ if not errorlevel 1 (
     exit /b 1
 )
 
-findstr /C:"Ate logo" "resultados\log_bateria.txt" >nul
-rem O log pode conter acentos em UTF-8, portanto a checagem decisiva e a ausencia de "Erro:".
+set "ETAPAS=0"
+for /f %%N in ('findstr /C:"Arquivos salvos em:" "resultados\log_bateria.txt" ^| find /C ":"') do set "ETAPAS=%%N"
+if not "%ETAPAS%"=="7" (
+    echo [ERRO] Nem todos os experimentos foram concluidos. Etapas concluidas: %ETAPAS% de 7.
+    pause
+    exit /b 1
+)
 
 echo.
-echo Verificacoes concluidas. Resultados em: %~dp0resultados
+echo Verificacoes e simulacoes concluidas. Resultados em: %~dp0resultados
 echo Log do menu: resultados\log_bateria.txt
 pause
 endlocal
