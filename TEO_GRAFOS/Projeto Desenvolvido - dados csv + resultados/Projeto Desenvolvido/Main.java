@@ -8,9 +8,9 @@ Conteudo: Aplicacao com menu de opcoes, leitura de arquivos,
 autor Pedro Henrique Carvalho Pereira - 10418861
 autor Mateus Ribeiro Cerqueira - 10443901
 
-Compilação e Execução:
-javac *.java && java Main ./demanda_unificada.csv
 
+COMPILAÇÃO E EXECUÇÃO:
+javac -d ./bin *.java && java -cp ./bin Main ./demanda_unificada.csv
 
 
 Referencias:
