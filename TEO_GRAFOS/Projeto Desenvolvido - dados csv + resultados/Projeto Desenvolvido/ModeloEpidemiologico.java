@@ -1,4 +1,12 @@
 /*
+Projeto da Disciplina de Teoria dos Grafos - Partes 2 e 3
+Arquivo: ModeloEpidemiologico.java
+Conteudo: Contém os dados dos parâmetros epidemiológicos do
+          COVID-19.
+     
+autor Pedro Henrique Carvalho Pereira - 10418861
+autor Mateus Ribeiro Cerqueira - 10443901
+
 Referencias:
 - https://docs.oracle.com/javase/tutorial/collections/intro/index.html: Organização 
 dos nós e adjacências usando Java Collections.

@@ -1,4 +1,18 @@
 /*
+Projeto da Disciplina de Teoria dos Grafos - Partes 2 e 3
+Arquivo: Main.java
+Conteudo: Aplicacao com menu de opcoes, leitura de arquivos,
+          manipulação do CSV de demandas.
+
+     
+autor Pedro Henrique Carvalho Pereira - 10418861
+autor Mateus Ribeiro Cerqueira - 10443901
+
+Compilação e Execução:
+javac *.java && java Main ./demanda_unificada.csv
+
+
+
 Referencias:
 - https://docs.oracle.com/javase/tutorial/essential/io/fileio.html: Base para gerenciar arquivos 
 com a API NIO.2 do Java.
@@ -26,15 +40,10 @@ exceções (IOException) ao ler ou gravar os resultados finais.
 
 */
 
-
 import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
-/*
-  
-  javac *.java && java Main ./demanda_unificada.csv
- */
 public class Main {
 
     static Scanner in = new Scanner(System.in, "UTF-8");

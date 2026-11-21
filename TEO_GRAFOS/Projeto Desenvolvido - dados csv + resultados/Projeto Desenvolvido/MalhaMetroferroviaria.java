@@ -1,4 +1,12 @@
 /*
+Projeto da Disciplina de Teoria dos Grafos - Partes 2 e 3
+Arquivo: MalhaMetroferroviaria.java
+Conteudo: Constrói o grafo (𝑉, 𝐸, 𝑊𝑚) a partir dos dados 
+          de demanda e executa as simulações e os gráficos
+     
+autor Pedro Henrique Carvalho Pereira - 10418861
+autor Mateus Ribeiro Cerqueira - 10443901
+
 Referencias:
 - https://docs.oracle.com/javase/tutorial/2d/overview/rendering.html: Aplicação de Graphics2D,
  BasicStroke e dicas de renderização.
